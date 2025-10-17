@@ -1,0 +1,49 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="g1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(300 160) rotate(45) scale(320 240)">
+      <stop stop-color="#0F766E" stop-opacity="0.45" />
+      <stop offset="1" stop-color="#0F766E" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="g2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(920 80) rotate(65) scale(360 260)">
+      <stop stop-color="#E7E0D1" stop-opacity="0.6" />
+      <stop offset="1" stop-color="#E7E0D1" stop-opacity="0" />
+    </radialGradient>
+    <filter id="noise">
+      <feTurbulence type="fractalNoise" baseFrequency="2.5" numOctaves="2" />
+      <feColorMatrix type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.18 0" />
+    </filter>
+  </defs>
+  <rect width="1200" height="630" fill="#F4F7F6" />
+  <rect width="1200" height="630" fill="url(#g1)" />
+  <rect width="1200" height="630" fill="url(#g2)" />
+  <rect width="1200" height="630" opacity="0.08" filter="url(#noise)" />
+
+  <g filter="url(#glass)" transform="translate(140 140)">
+    <defs>
+      <filter id="glass" x="-50" y="-50" width="600" height="380" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+        <feGaussianBlur stdDeviation="20" result="blur" />
+      </filter>
+    </defs>
+  </g>
+
+  <g transform="translate(160 180)">
+    <rect width="420" height="260" rx="32" fill="rgba(255, 255, 255, 0.22)" stroke="rgba(255, 255, 255, 0.35)" stroke-width="1.5" />
+    <text x="32" y="72" font-size="48" font-family="'Inter', sans-serif" fill="#112027">Домик</text>
+    <text x="32" y="122" font-size="24" font-family="'Inter', sans-serif" fill="#334155">Живите в гостях, открывайте города и людей</text>
+    <rect x="32" y="160" width="160" height="48" rx="24" fill="#0F766E" />
+    <text x="52" y="192" font-size="18" font-family="'Inter', sans-serif" fill="#FFFFFF">Начать поиск</text>
+    <rect x="204" y="160" width="160" height="48" rx="24" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.4)" />
+    <text x="224" y="192" font-size="18" font-family="'Inter', sans-serif" fill="#112027">Как это работает</text>
+  </g>
+
+  <g transform="translate(700 140)">
+    <rect width="360" height="300" rx="36" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.45)" />
+    <rect x="32" y="40" width="296" height="44" rx="20" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.35)" />
+    <text x="44" y="68" font-size="18" font-family="'Inter', sans-serif" fill="#112027">Например, Владивосток</text>
+    <rect x="32" y="104" width="296" height="44" rx="20" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.35)" />
+    <text x="44" y="132" font-size="18" font-family="'Inter', sans-serif" fill="#112027">Мария из Санкт-Петербурга</text>
+    <rect x="32" y="168" width="296" height="76" rx="24" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.35)" />
+    <rect x="32" y="256" width="296" height="44" rx="20" fill="#0F766E" />
+    <text x="94" y="284" font-size="18" font-family="'Inter', sans-serif" fill="#FFFFFF">Отправить заявку</text>
+  </g>
+</svg>
