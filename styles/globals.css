@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 204 56% 98%;
+  --foreground: 207 37% 16%;
+  --muted: 204 30% 90%;
+  --muted-foreground: 207 20% 37%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 207 37% 16%;
+  --card: 0 0% 100%;
+  --card-foreground: 207 37% 16%;
+  --border: 204 33% 86%;
+  --input: 204 33% 86%;
+  --primary: 187 78% 24%;
+  --primary-foreground: 188 73% 88%;
+  --secondary: 204 33% 90%;
+  --secondary-foreground: 207 37% 16%;
+  --accent: 37 66% 76%;
+  --accent-foreground: 30 42% 26%;
+  --destructive: 4 85% 58%;
+  --destructive-foreground: 0 0% 100%;
+  --ring: 187 78% 24%;
+  --radius: 1.5rem;
+
+  --font-sans: 'Inter', 'Manrope', 'Nunito', system-ui, sans-serif;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: 206 35% 10%;
+  --foreground: 188 52% 92%;
+  --muted: 206 32% 18%;
+  --muted-foreground: 188 30% 72%;
+  --popover: 207 37% 12%;
+  --popover-foreground: 188 52% 92%;
+  --card: 206 35% 12%;
+  --card-foreground: 188 52% 92%;
+  --border: 207 24% 22%;
+  --input: 207 24% 22%;
+  --primary: 188 69% 42%;
+  --primary-foreground: 187 100% 10%;
+  --secondary: 205 32% 20%;
+  --secondary-foreground: 188 52% 92%;
+  --accent: 34 55% 62%;
+  --accent-foreground: 36 72% 12%;
+  --destructive: 4 82% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --ring: 188 69% 42%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "liga" 1, "calt" 1;
+  }
+
+  a {
+    @apply text-primary underline-offset-4 transition-colors hover:text-primary/80;
+  }
+}
+
+:focus-visible {
+  outline: 3px solid hsl(var(--accent));
+  outline-offset: 4px;
+  transition: outline-color 150ms ease;
+}
+
+.dark :focus-visible {
+  outline-color: hsl(var(--primary));
+}
+
+button:focus-visible {
+  border-radius: calc(var(--radius) - 6px);
+}
+
+[data-radius="sm"] {
+  border-radius: calc(var(--radius) - 8px);
+}
+
+[data-radius="md"] {
+  border-radius: calc(var(--radius) - 4px);
+}
+
+[data-radius="lg"] {
+  border-radius: var(--radius);
+}
+
+.shadow-soft {
+  box-shadow: 0 20px 40px -24px rgba(15, 23, 42, 0.35);
+}
+
+.shadow-soft-lg {
+  box-shadow: 0 30px 60px -30px rgba(15, 23, 42, 0.45);
+}
