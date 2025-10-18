@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Dialog } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
+import { TESTIMONIALS } from '../content/testimonials';
 
 const journeys = [
   {
@@ -20,17 +21,6 @@ const journeys = [
   {
     title: 'Приватность под контролем',
     description: 'Вы решаете, какие данные показывать гостям или хозяевам, а какие остаются только вам.'
-  }
-];
-
-const testimonials = [
-  {
-    quote: 'Стеклянные карточки делают интерфейс лёгким и понятным. Теперь поиск жилья занимает минуты.',
-    author: 'Ольга, дизайнер'
-  },
-  {
-    quote: 'Мне нравится, что акценты тёплые, а сам интерфейс будто подсвечивается изнутри.',
-    author: 'Иван, разработчик'
   }
 ];
 
@@ -76,14 +66,11 @@ export default function Home() {
 
           <section id="stories" className="space-y-10">
             <header className="max-w-3xl space-y-3">
-              <h2 className="text-3xl font-semibold text-fg sm:text-4xl">Истории путешественников</h2>
-              <p className="text-base text-fg/75">
-                Карточки отзывов используют усиленный стеклянный стиль, чтобы тексты оставались читаемыми на фоне световых
-                пятен.
-              </p>
+              <h2 className="text-3xl font-semibold text-fg sm:text-4xl">{TESTIMONIALS.title}</h2>
+              <p className="text-base text-fg/75">{TESTIMONIALS.subtitle}</p>
             </header>
             <div className="grid gap-6 md:grid-cols-2">
-              {testimonials.map((item) => (
+              {TESTIMONIALS.items.map((item) => (
                 <Card key={item.author} className="glass-strong h-full">
                   <CardContent className="space-y-4">
                     <p className="text-lg text-fg/90">“{item.quote}”</p>
