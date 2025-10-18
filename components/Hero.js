@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Input } from './ui/input';
 import { Select } from './ui/select';
 import { Textarea } from './ui/textarea';
+import { HOME } from '../content/home';
 
 const demoHosts = [
   'Алексей из Сочи',
@@ -20,18 +21,13 @@ export function Hero() {
         <span className="inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-xs font-medium text-fg/80 shadow-sm">
           Добро пожаловать в Домик
         </span>
-        <h1 className="text-4xl font-semibold tracking-tight text-fg sm:text-5xl lg:text-6xl">
-          Живите в гостях, открывайте города и людей
-        </h1>
-        <p className="text-base text-fg/80 sm:text-lg">
-          Домик помогает путешественникам и хозяевам находить друг друга. Стеклянный интерфейс подчёркивает прозрачность
-          сервиса, а новая дизайн-система делает взаимодействие спокойным и уютным.
-        </p>
+        <h1 className="text-4xl font-semibold tracking-tight text-fg sm:text-5xl lg:text-6xl">{HOME.heroTitle}</h1>
+        <p className="text-base text-fg/80 sm:text-lg">{HOME.heroSubtitle}</p>
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
           <Button variant="solid" className="shadow-glass">
-            Начать поиск
+            {HOME.ctaPrimary}
           </Button>
-          <Button variant="ghost">Как это работает</Button>
+          <Button variant="ghost">{HOME.ctaSecondary}</Button>
         </div>
         <dl className="mt-8 grid grid-cols-2 gap-6 sm:grid-cols-4">
           {[{ label: 'Хозяева', value: '4 500+' }, { label: 'Городов', value: '120' }, { label: 'Путешественники', value: '32 000+' }, { label: 'Отзывов', value: '18 500' }].map((item) => (

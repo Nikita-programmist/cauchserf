@@ -56,7 +56,7 @@ export default function Home() {
               <h2 className="text-3xl font-semibold text-fg sm:text-4xl">Прозрачные сценарии путешествий</h2>
               <p className="text-base text-fg/75">
                 Мы собрали ключевые сценарии сервиса и адаптировали их к новой стеклянной системе «Домик». Каждый блок легко
-                комбинируется и наследует токены Tailwind.
+                комбинируется и сохраняет единый визуальный стиль.
               </p>
             </header>
             <div className="grid gap-6 md:grid-cols-3">
@@ -138,7 +138,7 @@ export default function Home() {
         <footer className="glass mx-auto flex w-full max-w-4xl flex-col items-center gap-2 rounded-2xl px-6 py-5 text-center text-sm text-fg/70">
           <p>© {new Date().getFullYear()} Домик. Путешествуйте ответственно.</p>
           <p className="text-xs">
-            Стеклянная тема использует переменные Tailwind и доступные цвета для контраста 4.5:1.
+            Стеклянная тема использует согласованные переменные и доступные цвета для контраста 4.5:1.
           </p>
         </footer>
       </div>
