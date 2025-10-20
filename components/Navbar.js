@@ -1,3 +1,4 @@
+import { useRouter } from 'next/router';
 import { useState } from 'react';
 import { Button } from './ui/button';
 import { Popover } from './ui/popover';
@@ -9,6 +10,7 @@ const links = [
 ];
 
 export function Navbar() {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -39,7 +41,9 @@ export function Navbar() {
         </div>
         <div className="hidden gap-3 md:flex">
           <Button variant="ghost">Вход</Button>
-          <Button variant="solid">Зарегистрироваться</Button>
+          <Button variant="solid" type="button" onClick={() => router.push('/onboarding/role')}>
+            Зарегистрироваться
+          </Button>
         </div>
         <div className="md:hidden">
           <Button variant="glass" aria-expanded={menuOpen} onClick={() => setMenuOpen((prev) => !prev)}>
@@ -67,7 +71,15 @@ export function Navbar() {
             <Button variant="ghost" className="w-full">
               Вход
             </Button>
-            <Button variant="solid" className="w-full">
+            <Button
+              variant="solid"
+              className="w-full"
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                router.push('/onboarding/role');
+              }}
+            >
               Зарегистрироваться
             </Button>
           </div>
