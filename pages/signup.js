@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
-import { hasSupabaseEnv, supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -15,12 +15,6 @@ export default function SignUpPage() {
 
   useEffect(() => {
     let isMounted = true;
-
-    if (!supabase) {
-      return () => {
-        isMounted = false;
-      };
-    }
 
     const checkSession = async () => {
       const { data } = await supabase.auth.getUser();
@@ -43,10 +37,6 @@ export default function SignUpPage() {
     event.preventDefault();
     setError('');
     setSuccessMessage('');
-    if (!supabase) {
-      setError('Supabase env не настроены (URL/KEY).');
-      return;
-    }
     setLoading(true);
 
     const { error: signUpError } = await supabase.auth.signUp({
@@ -103,14 +93,11 @@ export default function SignUpPage() {
                 className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
               />
             </label>
-            {!hasSupabaseEnv ? (
-              <p className="text-sm text-red-500">Supabase env не настроены (URL/KEY).</p>
-            ) : null}
             {error ? <p className="text-sm text-red-500">{error}</p> : null}
             {successMessage ? <p className="text-sm text-emerald-400">{successMessage}</p> : null}
             <button
               type="submit"
-              disabled={loading || !supabase}
+              disabled={loading}
               className="w-full rounded-xl bg-white/80 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
             >
               {loading ? 'Отправляем...' : 'Зарегистрироваться'}

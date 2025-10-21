@@ -2,21 +2,14 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
-import { hasSupabaseEnv, supabase } from '../../lib/supabaseClient';
+import { supabase } from '../../lib/supabaseClient';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const [message, setMessage] = useState('Обрабатываем вход...');
+  const [message, setMessage] = useState('Загружаем...');
 
   useEffect(() => {
     let isActive = true;
-
-    if (!supabase) {
-      if (isActive) {
-        setMessage('Supabase env не настроены (URL/KEY).');
-      }
-      return;
-    }
 
     const handleSessionExchange = async () => {
       const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
@@ -49,7 +42,7 @@ export default function AuthCallbackPage() {
       </Head>
       <main className="flex min-h-screen items-center justify-center px-6">
         <div className="glass w-full max-w-sm px-6 py-8 text-center text-sm text-fg/80">
-          {!hasSupabaseEnv ? 'Supabase env не настроены (URL/KEY).' : message}
+          {message}
         </div>
       </main>
     </>

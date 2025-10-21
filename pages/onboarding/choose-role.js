@@ -2,7 +2,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
-import { hasSupabaseEnv, supabase } from '../../lib/supabaseClient';
+import { supabase } from '../../lib/supabaseClient';
 
 export default function ChooseRolePage() {
   const router = useRouter();
@@ -12,14 +12,6 @@ export default function ChooseRolePage() {
 
   useEffect(() => {
     let isMounted = true;
-
-    if (!supabase) {
-      setLoading(false);
-      setError('Supabase env не настроены (URL/KEY).');
-      return () => {
-        isMounted = false;
-      };
-    }
 
     const ensureAuthenticated = async () => {
       const { data } = await supabase.auth.getUser();
@@ -48,10 +40,6 @@ export default function ChooseRolePage() {
   }, [router]);
 
   const handleChooseRole = async (role) => {
-    if (!supabase) {
-      setError('Supabase env не настроены (URL/KEY).');
-      return;
-    }
     setError('');
     setAction(role);
     const { error: updateError } = await supabase.auth.updateUser({
@@ -87,15 +75,12 @@ export default function ChooseRolePage() {
             <h1 className="mt-2 text-2xl font-semibold text-fg">Кто вы в Домике?</h1>
             <p className="text-sm text-fg/70">Выберите роль, чтобы мы показали вам нужные вопросы.</p>
           </div>
-          {!hasSupabaseEnv ? (
-            <p className="text-sm text-red-500">Supabase env не настроены (URL/KEY).</p>
-          ) : null}
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
           <div className="grid gap-4 md:grid-cols-2">
             <button
               type="button"
               onClick={() => handleChooseRole('traveler')}
-              disabled={!!action || !supabase}
+              disabled={!!action}
               className="rounded-2xl border border-white/20 bg-white/5 px-6 py-6 text-left transition hover:border-white/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <h2 className="text-lg font-semibold text-fg">Я путешественник</h2>
@@ -107,7 +92,7 @@ export default function ChooseRolePage() {
             <button
               type="button"
               onClick={() => handleChooseRole('host')}
-              disabled={!!action || !supabase}
+              disabled={!!action}
               className="rounded-2xl border border-white/20 bg-white/5 px-6 py-6 text-left transition hover:border-white/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <h2 className="text-lg font-semibold text-fg">Я хозяин</h2>
