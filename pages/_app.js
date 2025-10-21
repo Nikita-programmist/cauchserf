@@ -1,6 +1,9 @@
 import '../styles/globals.css';
 import { useEffect } from 'react';
 
+import { AuthProvider } from '../components/AuthProvider';
+import { SupabaseEnvBanner } from '../components/SupabaseEnvBanner';
+
 function setDomikTheme() {
   const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   const saved = window.localStorage.getItem('domik-theme');
@@ -23,6 +26,10 @@ export default function App({ Component, pageProps }) {
     media.addEventListener('change', handler);
     return () => media.removeEventListener('change', handler);
   }, []);
-
-  return <Component {...pageProps} />;
+  return (
+    <AuthProvider initialSession={pageProps.initialSession}>
+      <SupabaseEnvBanner />
+      <Component {...pageProps} />
+    </AuthProvider>
+  );
 }

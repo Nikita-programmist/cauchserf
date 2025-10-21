@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import { Popover } from './ui/popover';
+
+import { useAuth } from './AuthProvider';
 
 const links = [
   { label: 'Гиды', href: '#guides' },
@@ -10,6 +14,40 @@ const links = [
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { user, supabase, hasSupabaseEnv } = useAuth();
+  const [profileRole, setProfileRole] = useState(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!supabase || !user) {
+      setProfileRole(null);
+      return;
+    }
+
+    let active = true;
+
+    supabase
+      .from('profiles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!active) return;
+        setProfileRole(data?.role ?? null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [supabase, user]);
+
+  const handleSignOut = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    router.push('/');
+  };
+
+  const roleLabel = profileRole === 'host' ? 'Хозяин' : profileRole === 'guest' ? 'Гость' : null;
 
   return (
     <header className="sticky top-4 z-40">
@@ -38,8 +76,38 @@ export function Navbar() {
           </Popover>
         </div>
         <div className="hidden gap-3 md:flex">
-          <Button variant="ghost">Вход</Button>
-          <Button variant="solid">Зарегистрироваться</Button>
+          {!user || !hasSupabaseEnv ? (
+            <>
+              <Button variant="ghost" asChild>
+                <Link href="/signin">Вход</Link>
+              </Button>
+              <Button variant="solid" asChild>
+                <Link href="/signup">Зарегистрироваться</Link>
+              </Button>
+            </>
+          ) : (
+            <div className="flex items-center gap-3">
+              {roleLabel ? (
+                <span className="rounded-full border border-white/30 px-3 py-1 text-xs uppercase tracking-wide text-fg/80">
+                  {roleLabel}
+                </span>
+              ) : null}
+              <Popover triggerLabel="Аккаунт">
+                <div className="flex flex-col gap-2 text-sm text-fg/90">
+                  <Link href="/profile" className="rounded-md px-2 py-1 hover:bg-white/10">
+                    Профиль
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="rounded-md px-2 py-1 text-left hover:bg-white/10"
+                  >
+                    Выйти
+                  </button>
+                </div>
+              </Popover>
+            </div>
+          )}
         </div>
         <div className="md:hidden">
           <Button variant="glass" aria-expanded={menuOpen} onClick={() => setMenuOpen((prev) => !prev)}>
@@ -64,12 +132,30 @@ export function Navbar() {
             Команда
           </a>
           <div className="mt-3 flex flex-col gap-2">
-            <Button variant="ghost" className="w-full">
-              Вход
-            </Button>
-            <Button variant="solid" className="w-full">
-              Зарегистрироваться
-            </Button>
+            {!user || !hasSupabaseEnv ? (
+              <>
+                <Button variant="ghost" className="w-full" asChild>
+                  <Link href="/signin">Вход</Link>
+                </Button>
+                <Button variant="solid" className="w-full" asChild>
+                  <Link href="/signup">Зарегистрироваться</Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                {roleLabel ? (
+                  <div className="rounded-full border border-white/30 px-3 py-1 text-center text-xs uppercase tracking-wide text-fg/80">
+                    {roleLabel}
+                  </div>
+                ) : null}
+                <Button variant="ghost" className="w-full" asChild>
+                  <Link href="/profile">Профиль</Link>
+                </Button>
+                <Button variant="solid" className="w-full" onClick={handleSignOut}>
+                  Выйти
+                </Button>
+              </>
+            )}
           </div>
         </div>
       ) : null}
