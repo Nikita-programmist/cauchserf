@@ -25,7 +25,7 @@ export default function ProfilePage({ initialProfile, hasSupabaseEnv }) {
 
   useEffect(() => {
     if (!user && hasSupabaseEnv) {
-      router.replace('/signin');
+      router.replace('/login');
     }
   }, [hasSupabaseEnv, router, user]);
 
@@ -186,7 +186,7 @@ export async function getServerSideProps(ctx) {
   if (!session) {
     return {
       redirect: {
-        destination: '/signin',
+        destination: '/login',
         permanent: false
       }
     };

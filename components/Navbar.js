@@ -79,7 +79,7 @@ export function Navbar() {
           {!user || !hasSupabaseEnv ? (
             <>
               <Button variant="ghost" asChild>
-                <Link href="/signin">Вход</Link>
+                <Link href="/login">Вход</Link>
               </Button>
               <Button variant="solid" asChild>
                 <Link href="/signup">Зарегистрироваться</Link>
@@ -135,7 +135,7 @@ export function Navbar() {
             {!user || !hasSupabaseEnv ? (
               <>
                 <Button variant="ghost" className="w-full" asChild>
-                  <Link href="/signin">Вход</Link>
+                  <Link href="/login">Вход</Link>
                 </Button>
                 <Button variant="solid" className="w-full" asChild>
                   <Link href="/signup">Зарегистрироваться</Link>

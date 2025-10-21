@@ -5,18 +5,18 @@ import { useEffect, useState } from 'react';
 
 import { hasSupabaseEnv, supabase } from '../lib/supabaseClient';
 
-export default function SignUpPage() {
+export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     let isMounted = true;
 
     if (!supabase) {
+      setLoading(false);
       return () => {
         isMounted = false;
       };
@@ -42,43 +42,45 @@ export default function SignUpPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
-    setSuccessMessage('');
     if (!supabase) {
       setError('Supabase env не настроены (URL/KEY).');
       return;
     }
     setLoading(true);
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`
-      }
+      password
     });
 
     setLoading(false);
 
-    if (signUpError) {
-      setError(signUpError.message);
+    if (signInError) {
+      setError(signInError.message);
       return;
     }
 
-    setSuccessMessage('Проверьте почту для подтверждения.');
-    setEmail('');
-    setPassword('');
+    const { data } = await supabase.auth.getUser();
+    const user = data?.user;
+    const role = user?.user_metadata?.role;
+
+    if (role) {
+      router.push('/app');
+    } else {
+      router.push('/onboarding/choose-role');
+    }
   };
 
   return (
     <>
       <Head>
-        <title>Зарегистрироваться — Домик</title>
+        <title>Войти — Домик</title>
       </Head>
       <main className="mx-auto mt-20 flex w-full max-w-md flex-col gap-6 px-6">
         <div className="glass flex flex-col gap-6 px-6 py-8">
           <div>
-            <h1 className="text-2xl font-semibold text-fg">Создать аккаунт</h1>
-            <p className="text-sm text-fg/70">Укажите почту и пароль, чтобы начать путешествие с Домиком.</p>
+            <h1 className="text-2xl font-semibold text-fg">Войти</h1>
+            <p className="text-sm text-fg/70">Используйте свою почту и пароль, чтобы продолжить.</p>
           </div>
           <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
             <label className="flex flex-col gap-2 text-sm text-fg/80">
@@ -99,7 +101,7 @@ export default function SignUpPage() {
                 required
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="Придумайте пароль"
+                placeholder="Введите пароль"
                 className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
               />
             </label>
@@ -107,19 +109,18 @@ export default function SignUpPage() {
               <p className="text-sm text-red-500">Supabase env не настроены (URL/KEY).</p>
             ) : null}
             {error ? <p className="text-sm text-red-500">{error}</p> : null}
-            {successMessage ? <p className="text-sm text-emerald-400">{successMessage}</p> : null}
             <button
               type="submit"
               disabled={loading || !supabase}
               className="w-full rounded-xl bg-white/80 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {loading ? 'Отправляем...' : 'Зарегистрироваться'}
+              {loading ? 'Входим...' : 'Войти'}
             </button>
           </form>
           <p className="text-sm text-fg/70">
-            Уже с нами?{' '}
-            <Link href="/login" className="text-fg">
-              Войдите
+            Нет аккаунта?{' '}
+            <Link href="/signup" className="text-fg">
+              Зарегистрируйтесь
             </Link>
             .
           </p>
