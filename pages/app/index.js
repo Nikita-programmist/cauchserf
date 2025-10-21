@@ -12,13 +12,6 @@ export default function AppHomePage() {
   useEffect(() => {
     let isMounted = true;
 
-    if (!supabase) {
-      setLoading(false);
-      return () => {
-        isMounted = false;
-      };
-    }
-
     const fetchUser = async () => {
       const { data } = await supabase.auth.getUser();
       if (!isMounted) return;
@@ -41,22 +34,9 @@ export default function AppHomePage() {
   }, [router]);
 
   const handleSignOut = async () => {
-    if (!supabase) {
-      return;
-    }
     await supabase.auth.signOut();
     router.push('/login');
   };
-
-  if (!supabase) {
-    return (
-      <main className="flex min-h-screen items-center justify-center px-6">
-        <div className="glass w-full max-w-sm px-6 py-8 text-center text-sm text-fg/70">
-          Supabase env не настроены (URL/KEY).
-        </div>
-      </main>
-    );
-  }
 
   if (loading) {
     return (

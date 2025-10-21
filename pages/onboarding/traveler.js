@@ -2,7 +2,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
-import { hasSupabaseEnv, supabase } from '../../lib/supabaseClient';
+import { supabase } from '../../lib/supabaseClient';
 
 export default function TravelerOnboardingPage() {
   const router = useRouter();
@@ -14,14 +14,6 @@ export default function TravelerOnboardingPage() {
 
   useEffect(() => {
     let isMounted = true;
-
-    if (!supabase) {
-      setLoading(false);
-      setError('Supabase env не настроены (URL/KEY).');
-      return () => {
-        isMounted = false;
-      };
-    }
 
     const fetchUser = async () => {
       const { data } = await supabase.auth.getUser();
@@ -53,10 +45,6 @@ export default function TravelerOnboardingPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!supabase) {
-      setError('Supabase env не настроены (URL/KEY).');
-      return;
-    }
     setError('');
     setSaving(true);
 
@@ -117,13 +105,10 @@ export default function TravelerOnboardingPage() {
                 className="w-full rounded-2xl border border-white/20 bg-white/5 px-3 py-3 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
               />
             </label>
-            {!hasSupabaseEnv ? (
-              <p className="text-sm text-red-500">Supabase env не настроены (URL/KEY).</p>
-            ) : null}
             {error ? <p className="text-sm text-red-500">{error}</p> : null}
             <button
               type="submit"
-              disabled={saving || !supabase}
+              disabled={saving}
               className="self-start rounded-xl bg-white/80 px-6 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
             >
               {saving ? 'Сохраняем…' : 'Продолжить'}

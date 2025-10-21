@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
-import { hasSupabaseEnv, supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,13 +14,6 @@ export default function LoginPage() {
 
   useEffect(() => {
     let isMounted = true;
-
-    if (!supabase) {
-      setLoading(false);
-      return () => {
-        isMounted = false;
-      };
-    }
 
     const checkSession = async () => {
       const { data } = await supabase.auth.getUser();
@@ -42,10 +35,6 @@ export default function LoginPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
-    if (!supabase) {
-      setError('Supabase env не настроены (URL/KEY).');
-      return;
-    }
     setLoading(true);
 
     const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -64,11 +53,7 @@ export default function LoginPage() {
     const user = data?.user;
     const role = user?.user_metadata?.role;
 
-    if (role) {
-      router.push('/app');
-    } else {
-      router.push('/onboarding/choose-role');
-    }
+    router.replace(role ? '/app' : '/onboarding/choose-role');
   };
 
   return (
@@ -105,13 +90,10 @@ export default function LoginPage() {
                 className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
               />
             </label>
-            {!hasSupabaseEnv ? (
-              <p className="text-sm text-red-500">Supabase env не настроены (URL/KEY).</p>
-            ) : null}
             {error ? <p className="text-sm text-red-500">{error}</p> : null}
             <button
               type="submit"
-              disabled={loading || !supabase}
+              disabled={loading}
               className="w-full rounded-xl bg-white/80 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
             >
               {loading ? 'Входим...' : 'Войти'}
