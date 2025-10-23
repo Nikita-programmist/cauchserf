@@ -4,62 +4,170 @@ import { useEffect, useState } from 'react';
 
 import { supabase } from '../../lib/supabaseClient';
 
+const genderOptions = [
+  { value: '', label: 'Выберите пол' },
+  { value: 'male', label: 'Мужской' },
+  { value: 'female', label: 'Женский' },
+  { value: 'other', label: 'Другое' }
+];
+
 export default function TravelerOnboardingPage() {
   const router = useRouter();
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [city, setCity] = useState('');
   const [bio, setBio] = useState('');
-  const [error, setError] = useState('');
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState('');
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState('');
+  const [existingAvatarUrl, setExistingAvatarUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    let isMounted = true;
+    let isActive = true;
 
-    const fetchUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!isMounted) return;
-      const user = data?.user;
+    const fetchProfile = async () => {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+
+      if (!isActive) return;
 
       if (!user) {
         router.replace('/login');
         return;
       }
 
-      const role = user.user_metadata?.role;
-      if (role && role !== 'traveler') {
-        router.replace('/app');
+      const { data, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!isActive) return;
+
+      if (profileError) {
+        setError(profileError.message);
+        setLoading(false);
         return;
       }
 
-      setCity(user.user_metadata?.city ?? '');
-      setBio(user.user_metadata?.bio ?? '');
+      if (data?.role && data.role !== 'traveler') {
+        router.replace('/profile');
+        return;
+      }
+
+      if (data) {
+        setFirstName(data.first_name ?? '');
+        setLastName(data.last_name ?? '');
+        setCity(data.city ?? '');
+        setBio(data.bio ?? '');
+        setAge(data.age ? String(data.age) : '');
+        setGender(data.gender ?? '');
+        setExistingAvatarUrl(data.avatar_url ?? '');
+        setAvatarPreview(data.avatar_url ?? '');
+      }
+
       setLoading(false);
     };
 
-    fetchUser();
+    fetchProfile();
 
     return () => {
-      isMounted = false;
+      isActive = false;
     };
   }, [router]);
+
+  useEffect(() => {
+    let objectUrl;
+
+    if (avatarFile) {
+      objectUrl = URL.createObjectURL(avatarFile);
+      setAvatarPreview(objectUrl);
+      return () => {
+        URL.revokeObjectURL(objectUrl);
+      };
+    }
+
+    return undefined;
+  }, [avatarFile]);
+
+  const handleFileChange = (event) => {
+    const file = event.target.files?.[0] ?? null;
+    setAvatarFile(file);
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
     setSaving(true);
 
-    const { error: updateError } = await supabase.auth.updateUser({
-      data: { city, bio }
-    });
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
 
-    setSaving(false);
-
-    if (updateError) {
-      setError(updateError.message);
+    if (!user) {
+      setSaving(false);
+      router.replace('/login');
       return;
     }
 
-    router.push('/app');
+    let avatarUrl = existingAvatarUrl || null;
+
+    if (avatarFile) {
+      const fileExt = avatarFile.name.split('.').pop();
+      const fileName = `${Date.now()}_avatar.${fileExt || 'jpg'}`;
+      const filePath = `${user.id}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, avatarFile, {
+        upsert: false
+      });
+
+      if (uploadError) {
+        setError(uploadError.message);
+        setSaving(false);
+        return;
+      }
+
+      const {
+        data: { publicUrl }
+      } = supabase.storage.from('avatars').getPublicUrl(filePath);
+
+      avatarUrl = publicUrl;
+    }
+
+    const updates = {
+      id: user.id,
+      role: 'traveler',
+      first_name: firstName.trim() || null,
+      last_name: lastName.trim() || null,
+      city: city.trim() || null,
+      bio: bio.trim() || null,
+      age: age ? Number(age) : null,
+      gender: gender || null,
+      avatar_url: avatarUrl,
+      beds: null
+    };
+
+    const { error: upsertError } = await supabase.from('profiles').upsert(updates);
+
+    if (upsertError) {
+      setError(upsertError.message);
+      setSaving(false);
+      return;
+    }
+
+    const { error: metadataError } = await supabase.auth.updateUser({ data: { role: 'traveler' } });
+
+    if (metadataError) {
+      console.error(metadataError);
+    }
+
+    setSaving(false);
+    router.replace('/profile');
   };
 
   if (loading) {
@@ -80,11 +188,35 @@ export default function TravelerOnboardingPage() {
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-fg/60">Шаг 2</p>
             <h1 className="mt-2 text-2xl font-semibold text-fg">Расскажите о себе</h1>
-            <p className="text-sm text-fg/70">Мы покажем вам путешествия и людей, которые подойдут именно вам.</p>
+            <p className="text-sm text-fg/70">Мы подберём людей и места, которые подходят именно вам.</p>
           </div>
           <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+            <div className="flex flex-col gap-4 md:flex-row">
+              <label className="flex flex-1 flex-col gap-2 text-sm text-fg/80">
+                Имя
+                <input
+                  type="text"
+                  required
+                  value={firstName}
+                  onChange={(event) => setFirstName(event.target.value)}
+                  placeholder="Например, Мария"
+                  className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+                />
+              </label>
+              <label className="flex flex-1 flex-col gap-2 text-sm text-fg/80">
+                Фамилия
+                <input
+                  type="text"
+                  required
+                  value={lastName}
+                  onChange={(event) => setLastName(event.target.value)}
+                  placeholder="Например, Иванова"
+                  className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+                />
+              </label>
+            </div>
             <label className="flex flex-col gap-2 text-sm text-fg/80">
-              Ваш город
+              Город
               <input
                 type="text"
                 required
@@ -93,6 +225,33 @@ export default function TravelerOnboardingPage() {
                 placeholder="Например, Казань"
                 className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
               />
+            </label>
+            <label className="flex flex-col gap-2 text-sm text-fg/80">
+              Возраст
+              <input
+                type="number"
+                min="0"
+                required
+                value={age}
+                onChange={(event) => setAge(event.target.value)}
+                placeholder="29"
+                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm text-fg/80">
+              Пол
+              <select
+                required
+                value={gender}
+                onChange={(event) => setGender(event.target.value)}
+                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg focus:border-white/60 focus:outline-none"
+              >
+                {genderOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="flex flex-col gap-2 text-sm text-fg/80">
               О себе
@@ -105,7 +264,16 @@ export default function TravelerOnboardingPage() {
                 className="w-full rounded-2xl border border-white/20 bg-white/5 px-3 py-3 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
               />
             </label>
-            {error ? <p className="text-sm text-red-500">{error}</p> : null}
+            <label className="flex flex-col gap-2 text-sm text-fg/80">
+              Аватар
+              <input type="file" accept="image/*" onChange={handleFileChange} className="text-sm text-fg" />
+              {avatarPreview ? (
+                <div className="mt-2 h-24 w-24 overflow-hidden rounded-xl border border-white/20">
+                  <img src={avatarPreview} alt="Предпросмотр аватара" className="h-full w-full object-cover" />
+                </div>
+              ) : null}
+            </label>
+            {error ? <p className="text-sm text-red-400">{error}</p> : null}
             <button
               type="submit"
               disabled={saving}

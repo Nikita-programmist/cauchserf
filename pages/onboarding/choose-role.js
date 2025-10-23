@@ -8,24 +8,31 @@ export default function ChooseRolePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState('');
-  const [error, setError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
 
     const ensureAuthenticated = async () => {
-      const { data } = await supabase.auth.getUser();
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
       if (!isMounted) return;
-      const user = data?.user;
 
       if (!user) {
         router.replace('/login');
         return;
       }
 
-      const role = user.user_metadata?.role;
-      if (role) {
-        router.replace('/app');
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!isMounted) return;
+
+      if (profile?.role) {
+        router.replace('/profile');
         return;
       }
 
@@ -40,19 +47,9 @@ export default function ChooseRolePage() {
   }, [router]);
 
   const handleChooseRole = async (role) => {
-    setError('');
     setAction(role);
-    const { error: updateError } = await supabase.auth.updateUser({
-      data: { role }
-    });
-    setAction('');
-
-    if (updateError) {
-      setError(updateError.message);
-      return;
-    }
-
     router.push(role === 'traveler' ? '/onboarding/traveler' : '/onboarding/host');
+    setAction('');
   };
 
   if (loading) {
@@ -75,7 +72,6 @@ export default function ChooseRolePage() {
             <h1 className="mt-2 text-2xl font-semibold text-fg">Кто вы в Домике?</h1>
             <p className="text-sm text-fg/70">Выберите роль, чтобы мы показали вам нужные вопросы.</p>
           </div>
-          {error ? <p className="text-sm text-red-500">{error}</p> : null}
           <div className="grid gap-4 md:grid-cols-2">
             <button
               type="button"

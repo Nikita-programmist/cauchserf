@@ -16,12 +16,24 @@ export default function LoginPage() {
     let isMounted = true;
 
     const checkSession = async () => {
-      const { data } = await supabase.auth.getUser();
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
       if (!isMounted) return;
-      const user = data?.user;
-      const role = user?.user_metadata?.role;
-      if (user && role) {
-        router.replace('/app');
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (!isMounted) return;
+
+        if (profile?.role) {
+          router.replace('/profile');
+        } else {
+          router.replace('/onboarding/choose-role');
+        }
       }
     };
 
@@ -49,11 +61,19 @@ export default function LoginPage() {
       return;
     }
 
-    const { data } = await supabase.auth.getUser();
-    const user = data?.user;
-    const role = user?.user_metadata?.role;
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
 
-    router.replace(role ? '/app' : '/onboarding/choose-role');
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      router.replace(profile?.role ? '/profile' : '/onboarding/choose-role');
+    }
   };
 
   return (
