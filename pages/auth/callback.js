@@ -21,11 +21,22 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      const { data } = await supabase.auth.getUser();
-      const user = data?.user;
-      const role = user?.user_metadata?.role;
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
 
-      router.replace(role ? '/app' : '/onboarding/choose-role');
+      if (!user) {
+        router.replace('/login');
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      router.replace(profile?.role ? '/profile' : '/onboarding/choose-role');
     };
 
     handleSessionExchange();

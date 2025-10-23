@@ -29,7 +29,7 @@ export function Navbar() {
     supabase
       .from('profiles')
       .select('role')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .maybeSingle()
       .then(({ data }) => {
         if (!active) return;
@@ -97,6 +97,9 @@ export function Navbar() {
                   <Link href="/profile" className="rounded-md px-2 py-1 hover:bg-white/10">
                     Профиль
                   </Link>
+                  <Link href="/search" className="rounded-md px-2 py-1 hover:bg-white/10">
+                    Поиск
+                  </Link>
                   <button
                     type="button"
                     onClick={handleSignOut}
@@ -150,6 +153,9 @@ export function Navbar() {
                 ) : null}
                 <Button variant="ghost" className="w-full" asChild>
                   <Link href="/profile">Профиль</Link>
+                </Button>
+                <Button variant="ghost" className="w-full" asChild>
+                  <Link href="/search">Поиск</Link>
                 </Button>
                 <Button variant="solid" className="w-full" onClick={handleSignOut}>
                   Выйти

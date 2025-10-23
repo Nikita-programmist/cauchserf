@@ -11,8 +11,9 @@ const genderOptions = [
   { value: 'other', label: 'Другое' }
 ];
 
-export default function HostOnboardingPage() {
+export default function EditProfilePage() {
   const router = useRouter();
+  const [role, setRole] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [city, setCity] = useState('');
@@ -20,17 +21,17 @@ export default function HostOnboardingPage() {
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('');
   const [beds, setBeds] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [existingAvatarUrl, setExistingAvatarUrl] = useState('');
 
   useEffect(() => {
     let isActive = true;
 
-    const fetchProfile = async () => {
+    const loadProfile = async () => {
       const {
         data: { user }
       } = await supabase.auth.getUser();
@@ -56,27 +57,25 @@ export default function HostOnboardingPage() {
         return;
       }
 
-      if (data?.role && data.role !== 'host') {
-        router.replace('/profile');
+      if (!data) {
+        router.replace('/onboarding/choose-role');
         return;
       }
 
-      if (data) {
-        setFirstName(data.first_name ?? '');
-        setLastName(data.last_name ?? '');
-        setCity(data.city ?? '');
-        setBio(data.bio ?? '');
-        setAge(data.age ? String(data.age) : '');
-        setGender(data.gender ?? '');
-        setBeds(data.beds ? String(data.beds) : '');
-        setExistingAvatarUrl(data.avatar_url ?? '');
-        setAvatarPreview(data.avatar_url ?? '');
-      }
-
+      setRole(data.role ?? '');
+      setFirstName(data.first_name ?? '');
+      setLastName(data.last_name ?? '');
+      setCity(data.city ?? '');
+      setBio(data.bio ?? '');
+      setAge(data.age ? String(data.age) : '');
+      setGender(data.gender ?? '');
+      setBeds(data.beds ? String(data.beds) : '');
+      setAvatarUrl(data.avatar_url ?? '');
+      setAvatarPreview(data.avatar_url ?? '');
       setLoading(false);
     };
 
-    fetchProfile();
+    loadProfile();
 
     return () => {
       isActive = false;
@@ -96,6 +95,8 @@ export default function HostOnboardingPage() {
 
     return undefined;
   }, [avatarFile]);
+
+  const showBedsField = role === 'host';
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0] ?? null;
@@ -117,7 +118,7 @@ export default function HostOnboardingPage() {
       return;
     }
 
-    let avatarUrl = existingAvatarUrl || null;
+    let uploadedAvatarUrl = avatarUrl || null;
 
     if (avatarFile) {
       const fileExt = avatarFile.name.split('.').pop();
@@ -138,20 +139,20 @@ export default function HostOnboardingPage() {
         data: { publicUrl }
       } = supabase.storage.from('avatars').getPublicUrl(filePath);
 
-      avatarUrl = publicUrl;
+      uploadedAvatarUrl = publicUrl;
     }
 
     const updates = {
       id: user.id,
-      role: 'host',
+      role,
       first_name: firstName.trim() || null,
       last_name: lastName.trim() || null,
       city: city.trim() || null,
       bio: bio.trim() || null,
       age: age ? Number(age) : null,
       gender: gender || null,
-      avatar_url: avatarUrl,
-      beds: beds ? Number(beds) : null
+      avatar_url: uploadedAvatarUrl,
+      beds: showBedsField ? (beds ? Number(beds) : null) : null
     };
 
     const { error: upsertError } = await supabase.from('profiles').upsert(updates);
@@ -162,10 +163,11 @@ export default function HostOnboardingPage() {
       return;
     }
 
-    const { error: metadataError } = await supabase.auth.updateUser({ data: { role: 'host' } });
-
-    if (metadataError) {
-      console.error(metadataError);
+    if (role) {
+      const { error: metadataError } = await supabase.auth.updateUser({ data: { role } });
+      if (metadataError) {
+        console.error(metadataError);
+      }
     }
 
     setSaving(false);
@@ -180,17 +182,25 @@ export default function HostOnboardingPage() {
     );
   }
 
+  if (error && !saving) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-6">
+        <div className="glass w-full max-w-sm px-6 py-8 text-center text-sm text-red-400">{error}</div>
+      </main>
+    );
+  }
+
   return (
     <>
       <Head>
-        <title>Анкета хозяина — Домик</title>
+        <title>Редактировать профиль — Домик</title>
       </Head>
       <main className="mx-auto mt-16 flex w-full max-w-2xl flex-col gap-6 px-6">
         <div className="glass flex flex-col gap-6 px-8 py-10">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-fg/60">Шаг 2</p>
-            <h1 className="mt-2 text-2xl font-semibold text-fg">Расскажите о себе и своём доме</h1>
-            <p className="text-sm text-fg/70">Эта информация поможет путешественникам понять, подходит ли им ваш дом.</p>
+            <p className="text-xs uppercase tracking-[0.3em] text-fg/60">Профиль</p>
+            <h1 className="mt-2 text-2xl font-semibold text-fg">Обновите информацию о себе</h1>
+            <p className="text-sm text-fg/70">Расскажите нам немного больше, чтобы гостям и путешественникам было легче найти вас.</p>
           </div>
           <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
             <div className="flex flex-col gap-4 md:flex-row">
@@ -198,7 +208,6 @@ export default function HostOnboardingPage() {
                 Имя
                 <input
                   type="text"
-                  required
                   value={firstName}
                   onChange={(event) => setFirstName(event.target.value)}
                   placeholder="Например, Анна"
@@ -209,7 +218,6 @@ export default function HostOnboardingPage() {
                 Фамилия
                 <input
                   type="text"
-                  required
                   value={lastName}
                   onChange={(event) => setLastName(event.target.value)}
                   placeholder="Например, Смирнова"
@@ -221,10 +229,9 @@ export default function HostOnboardingPage() {
               Город
               <input
                 type="text"
-                required
                 value={city}
                 onChange={(event) => setCity(event.target.value)}
-                placeholder="Например, Сочи"
+                placeholder="Москва"
                 className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
               />
             </label>
@@ -233,17 +240,15 @@ export default function HostOnboardingPage() {
               <input
                 type="number"
                 min="0"
-                required
                 value={age}
                 onChange={(event) => setAge(event.target.value)}
-                placeholder="35"
+                placeholder="27"
                 className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
               />
             </label>
             <label className="flex flex-col gap-2 text-sm text-fg/80">
               Пол
               <select
-                required
                 value={gender}
                 onChange={(event) => setGender(event.target.value)}
                 className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg focus:border-white/60 focus:outline-none"
@@ -258,29 +263,34 @@ export default function HostOnboardingPage() {
             <label className="flex flex-col gap-2 text-sm text-fg/80">
               О себе
               <textarea
-                required
                 value={bio}
                 onChange={(event) => setBio(event.target.value)}
                 rows={4}
-                placeholder="Расскажите, что делает ваш дом особенным"
+                placeholder="Коротко расскажите о себе и своём образе жизни"
                 className="w-full rounded-2xl border border-white/20 bg-white/5 px-3 py-3 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
               />
             </label>
-            <label className="flex flex-col gap-2 text-sm text-fg/80">
-              Спальных мест
-              <input
-                type="number"
-                min="0"
-                required
-                value={beds}
-                onChange={(event) => setBeds(event.target.value)}
-                placeholder="Например, 2"
-                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
-              />
-            </label>
+            {showBedsField ? (
+              <label className="flex flex-col gap-2 text-sm text-fg/80">
+                Спальных мест
+                <input
+                  type="number"
+                  min="0"
+                  value={beds}
+                  onChange={(event) => setBeds(event.target.value)}
+                  placeholder="Например, 2"
+                  className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+                />
+              </label>
+            ) : null}
             <label className="flex flex-col gap-2 text-sm text-fg/80">
               Аватар
-              <input type="file" accept="image/*" onChange={handleFileChange} className="text-sm text-fg" />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="text-sm text-fg"
+              />
               {avatarPreview ? (
                 <div className="mt-2 h-24 w-24 overflow-hidden rounded-xl border border-white/20">
                   <img src={avatarPreview} alt="Предпросмотр аватара" className="h-full w-full object-cover" />
@@ -293,7 +303,7 @@ export default function HostOnboardingPage() {
               disabled={saving}
               className="self-start rounded-xl bg-white/80 px-6 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {saving ? 'Сохраняем…' : 'Продолжить'}
+              {saving ? 'Сохраняем…' : 'Сохранить'}
             </button>
           </form>
         </div>
