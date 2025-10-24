@@ -48,6 +48,7 @@ export function Navbar() {
   };
 
   const roleLabel = profileRole === 'host' ? 'Хозяин' : profileRole === 'guest' ? 'Гость' : null;
+  const isHost = profileRole === 'host';
 
   return (
     <header className="sticky top-4 z-40">
@@ -74,6 +75,21 @@ export function Navbar() {
               </a>
             </div>
           </Popover>
+        </div>
+        <div className="hidden items-center gap-3 md:flex">
+          <Button variant="glass" asChild>
+            <Link href="/search">Найти жильё</Link>
+          </Button>
+          {isHost ? (
+            <>
+              <Button variant="glass" asChild>
+                <Link href="/host/listings/new">Сдать жильё</Link>
+              </Button>
+              <Button variant="glass" asChild>
+                <Link href="/host/listings">Мои объявления</Link>
+              </Button>
+            </>
+          ) : null}
         </div>
         <div className="hidden gap-3 md:flex">
           {!user || !hasSupabaseEnv ? (
@@ -134,6 +150,19 @@ export function Navbar() {
           <a href="#team" className="rounded-lg px-3 py-2 hover:bg-white/10">
             Команда
           </a>
+          <Link href="/search" className="rounded-lg px-3 py-2 font-medium text-fg hover:bg-white/10">
+            Найти жильё
+          </Link>
+          {isHost ? (
+            <>
+              <Link href="/host/listings/new" className="rounded-lg px-3 py-2 font-medium text-fg hover:bg-white/10">
+                Сдать жильё
+              </Link>
+              <Link href="/host/listings" className="rounded-lg px-3 py-2 font-medium text-fg hover:bg-white/10">
+                Мои объявления
+              </Link>
+            </>
+          ) : null}
           <div className="mt-3 flex flex-col gap-2">
             {!user || !hasSupabaseEnv ? (
               <>
@@ -154,9 +183,19 @@ export function Navbar() {
                 <Button variant="ghost" className="w-full" asChild>
                   <Link href="/profile">Профиль</Link>
                 </Button>
-                <Button variant="ghost" className="w-full" asChild>
-                  <Link href="/search">Поиск</Link>
+                <Button variant="glass" className="w-full" asChild>
+                  <Link href="/search">Найти жильё</Link>
                 </Button>
+                {isHost ? (
+                  <>
+                    <Button variant="ghost" className="w-full" asChild>
+                      <Link href="/host/listings/new">Сдать жильё</Link>
+                    </Button>
+                    <Button variant="ghost" className="w-full" asChild>
+                      <Link href="/host/listings">Мои объявления</Link>
+                    </Button>
+                  </>
+                ) : null}
                 <Button variant="solid" className="w-full" onClick={handleSignOut}>
                   Выйти
                 </Button>
