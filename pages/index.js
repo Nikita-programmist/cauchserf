@@ -122,11 +122,8 @@ export default function Home() {
             </div>
           </section>
         </main>
-        <footer className="glass mx-auto flex w-full max-w-4xl flex-col items-center gap-2 rounded-2xl px-6 py-5 text-center text-sm text-fg/70">
+        <footer className="glass mx-auto flex w-full max-w-4xl flex-col items-center rounded-2xl px-6 py-5 text-center text-sm text-fg/70">
           <p>© {new Date().getFullYear()} Домик. Путешествуйте ответственно.</p>
-          <p className="text-xs">
-            Стеклянная тема использует согласованные переменные и доступные цвета для контраста 4.5:1.
-          </p>
         </footer>
       </div>
 
