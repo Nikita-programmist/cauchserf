@@ -8,7 +8,7 @@ export function useSendRequest() {
   const [error, setError] = useState('');
 
   const sendRequest = useCallback(
-    async ({ hostId, listingTitle, startDate, endDate, message }) => {
+    async ({ listingId, hostId, startDate, endDate, message }) => {
       if (!hasSupabaseEnv || !supabase) {
         const messageText = 'Подключение к Supabase недоступно';
         setError(messageText);
@@ -18,6 +18,13 @@ export function useSendRequest() {
 
       if (!user?.id) {
         const messageText = 'Требуется войти в аккаунт';
+        setError(messageText);
+        setStatus('error');
+        return { error: new Error(messageText) };
+      }
+
+      if (!listingId) {
+        const messageText = 'Не удалось определить объявление';
         setError(messageText);
         setStatus('error');
         return { error: new Error(messageText) };
@@ -33,10 +40,10 @@ export function useSendRequest() {
       setStatus('loading');
       setError('');
 
-      const { error: insertError } = await supabase.from('requests').insert({
+      const { error: insertError } = await supabase.from('stay_requests').insert({
+        listing_id: listingId,
         host_id: hostId,
-        guest_id: user.id,
-        listing_title: listingTitle || null,
+        traveler_id: user.id,
         start_date: startDate,
         end_date: endDate,
         message: message?.trim() || null

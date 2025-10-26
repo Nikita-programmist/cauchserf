@@ -16,7 +16,7 @@ const combineName = (profile) => {
 
 export default function ListingDetailsPage() {
   const router = useRouter();
-  const { supabase, hasSupabaseEnv } = useAuth();
+  const { supabase, hasSupabaseEnv, user } = useAuth();
   const { sendRequest, isLoading: isSendingRequest, resetStatus } = useSendRequest();
   const { id } = router.query;
 
@@ -64,8 +64,8 @@ export default function ListingDetailsPage() {
     }
 
     const { error: requestError } = await sendRequest({
+      listingId: listing?.id,
       hostId: listing?.host_id,
-      listingTitle: listing?.title ?? null,
       startDate,
       endDate,
       message: guestMessage
@@ -141,6 +141,7 @@ export default function ListingDetailsPage() {
   }, [id, supabase, hasSupabaseEnv]);
 
   const photos = Array.isArray(listing?.photos) ? listing.photos.slice(0, 4) : [];
+  const isHostViewing = Boolean(user?.id && listing?.host_id && listing.host_id === user.id);
 
   return (
     <>
@@ -203,54 +204,62 @@ export default function ListingDetailsPage() {
                 <h2 className="text-lg font-semibold text-fg">План поездки</h2>
                 <p className="mt-1 text-sm text-fg/70">Расскажите, когда хотите приехать и пару слов о поездке.</p>
               </div>
-              <form className="flex flex-col gap-5" onSubmit={handleRequestSubmit}>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="flex flex-col gap-2 text-sm text-fg/80">
-                    Дата заезда
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={handleStartDateChange}
-                      required
-                      className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg focus:border-white/60 focus:outline-none"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-2 text-sm text-fg/80">
-                    Дата выезда
-                    <input
-                      type="date"
-                      value={endDate}
-                      onChange={handleEndDateChange}
-                      required
-                      className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg focus:border-white/60 focus:outline-none"
-                    />
-                  </label>
-                </div>
-                <label className="flex flex-col gap-2 text-sm text-fg/80">
-                  Сообщение хозяину
-                  <textarea
-                    value={guestMessage}
-                    onChange={handleMessageChange}
-                    rows={4}
-                    placeholder="Расскажите немного о себе и цели поездки"
-                    className="w-full rounded-2xl border border-white/20 bg-white/5 px-3 py-3 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
-                  />
-                </label>
-                <Button
-                  type="submit"
-                  disabled={isSendingRequest}
-                  className="self-start"
-                >
-                  {isSendingRequest ? 'Отправляем…' : 'Попроситься в гости'}
-                </Button>
-              </form>
-              {statusMessage.type !== 'idle' ? (
-                <p
-                  className={`text-sm ${statusMessage.type === 'success' ? 'text-emerald-300' : 'text-red-400'}`}
-                >
-                  {statusMessage.text}
+              {isHostViewing ? (
+                <p className="rounded-2xl border border-white/15 bg-white/5 px-4 py-4 text-sm text-fg/70">
+                  Это ваше объявление. Гости увидят здесь форму для заявки на проживание.
                 </p>
-              ) : null}
+              ) : (
+                <>
+                  <form className="flex flex-col gap-5" onSubmit={handleRequestSubmit}>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="flex flex-col gap-2 text-sm text-fg/80">
+                        Дата заезда
+                        <input
+                          type="date"
+                          value={startDate}
+                          onChange={handleStartDateChange}
+                          required
+                          className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg focus:border-white/60 focus:outline-none"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-2 text-sm text-fg/80">
+                        Дата выезда
+                        <input
+                          type="date"
+                          value={endDate}
+                          onChange={handleEndDateChange}
+                          required
+                          className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg focus:border-white/60 focus:outline-none"
+                        />
+                      </label>
+                    </div>
+                    <label className="flex flex-col gap-2 text-sm text-fg/80">
+                      Сообщение хозяину
+                      <textarea
+                        value={guestMessage}
+                        onChange={handleMessageChange}
+                        rows={4}
+                        placeholder="Расскажите немного о себе и цели поездки"
+                        className="w-full rounded-2xl border border-white/20 bg-white/5 px-3 py-3 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+                      />
+                    </label>
+                    <Button
+                      type="submit"
+                      disabled={isSendingRequest}
+                      className="self-start"
+                    >
+                      {isSendingRequest ? 'Отправляем…' : 'Попроситься в гости'}
+                    </Button>
+                  </form>
+                  {statusMessage.type !== 'idle' ? (
+                    <p
+                      className={`text-sm ${statusMessage.type === 'success' ? 'text-emerald-300' : 'text-red-400'}`}
+                    >
+                      {statusMessage.text}
+                    </p>
+                  ) : null}
+                </>
+              )}
             </section>
           </>
         ) : null}
