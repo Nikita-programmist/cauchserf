@@ -3,6 +3,8 @@ import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
 import { supabase } from '../../lib/supabaseClient';
+import BackToHome from '../../components/BackToHome';
+import AvatarUploader from '../../components/AvatarUploader';
 
 const genderOptions = [
   { value: '', label: 'Выберите пол' },
@@ -23,7 +25,6 @@ export default function EditProfilePage() {
   const [beds, setBeds] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [avatarFile, setAvatarFile] = useState(null);
-  const [avatarPreview, setAvatarPreview] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -71,7 +72,6 @@ export default function EditProfilePage() {
       setGender(data.gender ?? '');
       setBeds(data.beds ? String(data.beds) : '');
       setAvatarUrl(data.avatar_url ?? '');
-      setAvatarPreview(data.avatar_url ?? '');
       setLoading(false);
     };
 
@@ -82,24 +82,9 @@ export default function EditProfilePage() {
     };
   }, [router]);
 
-  useEffect(() => {
-    let objectUrl;
-
-    if (avatarFile) {
-      objectUrl = URL.createObjectURL(avatarFile);
-      setAvatarPreview(objectUrl);
-      return () => {
-        URL.revokeObjectURL(objectUrl);
-      };
-    }
-
-    return undefined;
-  }, [avatarFile]);
-
   const showBedsField = role === 'host';
 
-  const handleFileChange = (event) => {
-    const file = event.target.files?.[0] ?? null;
+  const handleFileChange = (file) => {
     setAvatarFile(file);
   };
 
@@ -176,16 +161,18 @@ export default function EditProfilePage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center px-6">
-        <div className="glass w-full max-w-sm px-6 py-8 text-center text-sm text-fg/70">Загружаем…</div>
+      <main className="mx-auto mt-16 flex w-full max-w-2xl flex-col gap-6 px-6">
+        <BackToHome className="self-start" />
+        <div className="glass px-8 py-10 text-center text-sm text-fg/70">Загружаем…</div>
       </main>
     );
   }
 
   if (error && !saving) {
     return (
-      <main className="flex min-h-screen items-center justify-center px-6">
-        <div className="glass w-full max-w-sm px-6 py-8 text-center text-sm text-red-400">{error}</div>
+      <main className="mx-auto mt-16 flex w-full max-w-2xl flex-col gap-6 px-6">
+        <BackToHome className="self-start" />
+        <div className="glass px-8 py-10 text-center text-sm text-red-400">{error}</div>
       </main>
     );
   }
@@ -196,6 +183,7 @@ export default function EditProfilePage() {
         <title>Редактировать профиль — Домик</title>
       </Head>
       <main className="mx-auto mt-16 flex w-full max-w-2xl flex-col gap-6 px-6">
+        <BackToHome className="self-start" />
         <div className="glass flex flex-col gap-6 px-8 py-10">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-fg/60">Профиль</p>
@@ -283,20 +271,10 @@ export default function EditProfilePage() {
                 />
               </label>
             ) : null}
-            <label className="flex flex-col gap-2 text-sm text-fg/80">
-              Аватар
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="text-sm text-fg"
-              />
-              {avatarPreview ? (
-                <div className="mt-2 h-24 w-24 overflow-hidden rounded-xl border border-white/20">
-                  <img src={avatarPreview} alt="Предпросмотр аватара" className="h-full w-full object-cover" />
-                </div>
-              ) : null}
-            </label>
+            <div className="flex flex-col gap-2 text-sm text-fg/80">
+              <span>Аватар</span>
+              <AvatarUploader initialPreviewUrl={avatarUrl} onFileChange={handleFileChange} />
+            </div>
             {error ? <p className="text-sm text-red-400">{error}</p> : null}
             <button
               type="submit"
