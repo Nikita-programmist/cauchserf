@@ -36,6 +36,7 @@ export function ChatMessageList({
       ) : (
         messages.map((message) => {
           const isOwn = message.sender_id === currentUserId;
+          const content = message.body ?? message.text ?? '';
           return (
             <div key={message.id} className={cn('flex', isOwn ? 'justify-end' : 'justify-start')}>
               <div
@@ -46,7 +47,7 @@ export function ChatMessageList({
                     : 'border border-white/20 bg-white/10 text-fg shadow-slate-900/10'
                 )}
               >
-                <p className="whitespace-pre-line break-words">{message.text}</p>
+                <p className="whitespace-pre-line break-words">{content}</p>
                 <span className={cn('mt-2 block text-right text-xs', isOwn ? 'text-white/70' : 'text-fg/50')}>
                   {formatTime(message.created_at)}
                 </span>

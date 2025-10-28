@@ -45,7 +45,6 @@ export function useSendRequest() {
         .select('id')
         .eq('host_id', hostId)
         .eq('traveler_id', user.id)
-        .eq('listing_id', listingId)
         .maybeSingle();
 
       if (conversationLookupError) {
@@ -62,8 +61,7 @@ export function useSendRequest() {
           .from('conversations')
           .insert({
             host_id: hostId,
-            traveler_id: user.id,
-            listing_id: listingId
+            traveler_id: user.id
           })
           .select('id')
           .single();
@@ -75,7 +73,6 @@ export function useSendRequest() {
               .select('id')
               .eq('host_id', hostId)
               .eq('traveler_id', user.id)
-              .eq('listing_id', listingId)
               .maybeSingle();
 
             if (conflictError) {
@@ -123,7 +120,7 @@ export function useSendRequest() {
         const { error: messageInsertError } = await supabase.from('messages').insert({
           conversation_id: conversationId,
           sender_id: user.id,
-          text: trimmedMessage
+          body: trimmedMessage
         });
 
         if (messageInsertError) {
