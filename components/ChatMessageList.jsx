@@ -36,7 +36,7 @@ export function ChatMessageList({
       ) : (
         messages.map((message) => {
           const isOwn = message.sender_id === currentUserId;
-          const content = message.body ?? message.text ?? '';
+          const content = message.text ?? '';
           return (
             <div key={message.id} className={cn('flex', isOwn ? 'justify-end' : 'justify-start')}>
               <div

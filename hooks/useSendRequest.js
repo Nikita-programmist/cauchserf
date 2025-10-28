@@ -120,7 +120,7 @@ export function useSendRequest() {
         const { error: messageInsertError } = await supabase.from('messages').insert({
           conversation_id: conversationId,
           sender_id: user.id,
-          body: trimmedMessage
+          text: trimmedMessage
         });
 
         if (messageInsertError) {
