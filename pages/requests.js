@@ -1,10 +1,9 @@
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import BackToHomeLink from '../components/BackToHomeLink';
-import { Button } from '../components/ui/button';
 import { supabase } from '../lib/supabaseClient';
 
 const genderLabels = {
@@ -125,6 +124,14 @@ export default function RequestsPage() {
 
   const isHost = profile?.role === 'host';
 
+  const handleOpenChat = useCallback(
+    (conversationId) => {
+      if (!conversationId) return;
+      router.push(`/chat/${conversationId}`);
+    },
+    [router]
+  );
+
   const content = useMemo(() => {
     if (loading) {
       return <div className="glass px-8 py-10 text-center text-sm text-fg/70">Загружаем заявки…</div>;
@@ -226,14 +233,18 @@ export default function RequestsPage() {
                       <div className="flex flex-wrap gap-3 pt-2">
                         <Link
                           href={`/profile/${request.traveler_id}`}
-                          className="inline-flex items-center justify-center rounded-xl border border-white/30 px-4 py-2 text-sm font-medium text-fg/80 transition hover:border-white/60 hover:bg-white/10"
+                          className="inline-flex items-center justify-center rounded-full border border-white/30 px-4 py-2 text-sm font-medium text-fg/80 transition hover:border-white/60 hover:bg-white/10"
                         >
                           Профиль гостя
                         </Link>
                         {request.conversation_id ? (
-                          <Button asChild className="w-fit">
-                            <Link href={`/chat/${request.conversation_id}`}>Открыть чат</Link>
-                          </Button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenChat(request.conversation_id)}
+                            className="inline-flex items-center justify-center rounded-full border border-[#003B32]/40 px-4 py-2 text-sm font-medium text-[#003B32] transition hover:border-[#003B32]/60 hover:bg-[#003B32]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#005C4B]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+                          >
+                            Открыть чат
+                          </button>
                         ) : null}
                       </div>
                     </div>
@@ -245,7 +256,7 @@ export default function RequestsPage() {
         )}
       </div>
     );
-  }, [error, isHost, loading, profile, requests]);
+  }, [error, handleOpenChat, isHost, loading, profile, requests]);
 
   return (
     <>
@@ -253,7 +264,9 @@ export default function RequestsPage() {
         <title>Заявки гостей — Домик</title>
       </Head>
       <main className="mx-auto mt-16 flex w-full max-w-4xl flex-col gap-6 px-6 pb-16">
-        <BackToHomeLink className="self-start" />
+        <nav className="self-start">
+          <BackToHomeLink />
+        </nav>
         {content}
       </main>
     </>

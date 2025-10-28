@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { cn } from '../lib/utils';
-import { Button } from './ui/button';
 
 export function UploadField({
   id,
@@ -107,9 +106,21 @@ export function UploadField({
         className="hidden"
         onChange={handleChange}
       />
-      <Button type="button" onClick={handleButtonClick} className="self-start">
+      <label
+        htmlFor={inputId}
+        onClick={handleButtonClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleButtonClick();
+          }
+        }}
+        className="inline-flex w-fit cursor-pointer items-center justify-center rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-[#003B32] transition hover:border-white/40 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+      >
         {buttonLabel}
-      </Button>
+      </label>
       {helperText ? <p className="text-xs text-fg/60">{helperText}</p> : null}
       {multiple ? (
         hasPreviews ? (
