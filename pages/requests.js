@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 
 import BackToHomeLink from '../components/BackToHomeLink';
+import { Button } from '../components/ui/button';
 import { supabase } from '../lib/supabaseClient';
 
 const genderLabels = {
@@ -76,7 +77,7 @@ export default function RequestsPage() {
 
       const { data: requestsData, error: requestsError } = await supabase
         .from('stay_requests')
-        .select('id, listing_id, traveler_id, start_date, end_date, message, status, created_at')
+        .select('id, listing_id, traveler_id, start_date, end_date, message, status, created_at, conversation_id')
         .eq('host_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -240,6 +241,11 @@ export default function RequestsPage() {
                         >
                           Профиль гостя
                         </Link>
+                        {request.conversation_id ? (
+                          <Button asChild className="w-fit">
+                            <Link href={`/chat/${request.conversation_id}`}>Открыть чат</Link>
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
                   </div>

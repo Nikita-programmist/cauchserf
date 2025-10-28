@@ -1,4 +1,5 @@
 import Head from 'next/head';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
@@ -27,10 +28,18 @@ export default function ListingDetailsPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [guestMessage, setGuestMessage] = useState('');
-  const [statusMessage, setStatusMessage] = useState({ type: 'idle', text: '' });
+  const [statusMessage, setStatusMessage] = useState({ type: 'idle', text: '', conversationId: null });
 
   const clearStatusMessage = () => {
-    setStatusMessage((current) => (current.type === 'idle' ? current : { type: 'idle', text: '' }));
+    setStatusMessage((current) =>
+      current.type === 'idle'
+        ? current
+        : {
+            type: 'idle',
+            text: '',
+            conversationId: null
+          }
+    );
     resetStatus();
   };
 
@@ -54,16 +63,16 @@ export default function ListingDetailsPage() {
     clearStatusMessage();
 
     if (!startDate || !endDate) {
-      setStatusMessage({ type: 'error', text: 'Пожалуйста, укажите даты заезда и выезда.' });
+      setStatusMessage({ type: 'error', text: 'Пожалуйста, укажите даты заезда и выезда.', conversationId: null });
       return;
     }
 
     if (new Date(startDate) > new Date(endDate)) {
-      setStatusMessage({ type: 'error', text: 'Дата выезда должна быть позже даты заезда.' });
+      setStatusMessage({ type: 'error', text: 'Дата выезда должна быть позже даты заезда.', conversationId: null });
       return;
     }
 
-    const { error: requestError } = await sendRequest({
+    const { error: requestError, conversationId } = await sendRequest({
       listingId: listing?.id,
       hostId: listing?.host_id,
       startDate,
@@ -72,14 +81,14 @@ export default function ListingDetailsPage() {
     });
 
     if (requestError) {
-      setStatusMessage({ type: 'error', text: 'Не получилось отправить заявку. Попробуйте позже.' });
+      setStatusMessage({ type: 'error', text: 'Не получилось отправить заявку. Попробуйте позже.', conversationId: null });
       return;
     }
 
     setStartDate('');
     setEndDate('');
     setGuestMessage('');
-    setStatusMessage({ type: 'success', text: 'Заявка отправлена хозяину' });
+    setStatusMessage({ type: 'success', text: 'Заявка отправлена', conversationId: conversationId ?? null });
   };
 
   useEffect(() => {
@@ -246,10 +255,18 @@ export default function ListingDetailsPage() {
                     {isSendingRequest ? 'Отправляем…' : 'Попроситься в гости'}
                   </Button>
                 </form>
-                {statusMessage.type !== 'idle' ? (
-                  <p className={`text-sm ${statusMessage.type === 'success' ? 'text-emerald-300' : 'text-red-400'}`}>
-                    {statusMessage.text}
-                  </p>
+                {statusMessage.type === 'error' ? (
+                  <p className="text-sm text-red-400">{statusMessage.text}</p>
+                ) : null}
+                {statusMessage.type === 'success' ? (
+                  <div className="flex flex-col gap-3 rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-4 text-sm text-emerald-200">
+                    <p>{statusMessage.text}</p>
+                    {statusMessage.conversationId ? (
+                      <Button asChild className="w-fit">
+                        <Link href={`/chat/${statusMessage.conversationId}`}>Перейти в чат с хозяином</Link>
+                      </Button>
+                    ) : null}
+                  </div>
                 ) : null}
               </section>
             )}
