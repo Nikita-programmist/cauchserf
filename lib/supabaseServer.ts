@@ -1,24 +1,60 @@
 import { cookies } from 'next/headers';
-import type { NextRequest } from 'next/server';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
 
-let serviceClient: SupabaseClient | null = null;
+type TypedSupabaseClient = SupabaseClient;
 
-function assertEnv(name: string, value: string | undefined): string {
+type CookieOptions = {
+  domain?: string;
+  expires?: Date;
+  httpOnly?: boolean;
+  maxAge?: number;
+  path?: string;
+  sameSite?: 'lax' | 'strict' | 'none';
+  secure?: boolean;
+};
+
+let serviceClient: TypedSupabaseClient | null = null;
+
+function requireEnv(name: string, value: string | undefined): string {
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return value;
 }
 
-export function getServerSupabase(): SupabaseClient {
+export function getServerSupabase(): TypedSupabaseClient {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase environment variables are not configured');
+  }
+
+  const cookieStore = cookies();
+
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get(name: string) {
+        return cookieStore.get(name)?.value;
+      },
+      set(name: string, value: string, options?: CookieOptions) {
+        cookieStore.set({ name, value, ...options });
+      },
+      remove(name: string, options?: CookieOptions) {
+        cookieStore.set({ name, value: '', ...options, maxAge: 0 });
+      }
+    }
+  });
+}
+
+export function getServiceSupabase(): TypedSupabaseClient {
   if (serviceClient) {
     return serviceClient;
   }
 
-  const supabaseUrl = assertEnv('NEXT_PUBLIC_SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL);
-  const serviceRoleKey = assertEnv('SUPABASE_SERVICE_ROLE_KEY', process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY', process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   serviceClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: {
@@ -30,57 +66,27 @@ export function getServerSupabase(): SupabaseClient {
   return serviceClient;
 }
 
-export type CurrentUser = {
-  id: string;
-  email?: string | null;
-  name?: string | null;
-  avatar_url?: string | null;
+export type CurrentUser = Pick<User, 'id' | 'email' | 'app_metadata' | 'user_metadata'> & {
+  aud?: string;
 };
 
-export async function getCurrentUser(req: NextRequest): Promise<CurrentUser | null> {
+export async function getCurrentUser(): Promise<CurrentUser | null> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl || !anonKey) {
+  if (!supabaseUrl || !supabaseAnonKey) {
     return null;
   }
 
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-
-  const authHeader = req.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.replace('Bearer ', '').trim();
-    if (token) {
-      const { data, error } = await supabase.auth.getUser(token);
-      if (error) {
-        return null;
-      }
-      const user = data.user;
-      if (!user) {
-        return null;
-      }
-      return {
-        id: user.id,
-        email: user.email,
-        name: (user.user_metadata?.full_name as string | undefined) ?? null,
-        avatar_url: (user.user_metadata?.avatar_url as string | undefined) ?? null
-      };
-    }
-  }
-
+  const supabase = getServerSupabase();
   const {
-    data: { user }
+    data: { user },
+    error
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (error || !user) {
     return null;
   }
 
-  return {
-    id: user.id,
-    email: user.email,
-    name: (user.user_metadata?.full_name as string | undefined) ?? null,
-    avatar_url: (user.user_metadata?.avatar_url as string | undefined) ?? null
-  };
+  return user;
 }

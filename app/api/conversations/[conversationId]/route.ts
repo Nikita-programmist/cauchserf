@@ -1,17 +1,27 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getConversationWithMessages, ChatServiceError } from '../../../../lib/chatService';
+import { NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/supabaseServer';
+import { ChatServiceError, getConversationWithMessages } from '@/lib/chatService';
 
-export async function GET(req: NextRequest, { params }: { params: { conversationId: string } }) {
+export async function GET(
+  _req: Request,
+  { params }: { params: { conversationId: string } }
+) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
-    const conversationId = params.conversationId;
-    const payload = await getConversationWithMessages(req, conversationId);
+    const payload = await getConversationWithMessages(params.conversationId, user.id);
     return NextResponse.json(payload);
   } catch (error) {
     if (error instanceof ChatServiceError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      const status = error.status === 400 ? 400 : error.status;
+      return NextResponse.json({ error: error.message }, { status });
     }
 
-    console.error('Failed to load conversation', error);
+    console.error('Failed to fetch conversation', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

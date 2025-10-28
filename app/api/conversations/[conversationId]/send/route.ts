@@ -1,11 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { sendMessage, ChatServiceError } from '../../../../../lib/chatService';
+import { NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/supabaseServer';
+import { ChatServiceError, sendMessage } from '@/lib/chatService';
 
-export async function POST(req: NextRequest, { params }: { params: { conversationId: string } }) {
+export async function POST(
+  req: Request,
+  { params }: { params: { conversationId: string } }
+) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const body = await req.json().catch(() => null);
+  const text = typeof body?.text === 'string' ? body.text : '';
+
   try {
-    const body = await req.json();
-    const text = typeof body?.text === 'string' ? body.text : '';
-    const message = await sendMessage(req, params.conversationId, text);
+    const message = await sendMessage(params.conversationId, user.id, text);
     return NextResponse.json(message);
   } catch (error) {
     if (error instanceof ChatServiceError) {
