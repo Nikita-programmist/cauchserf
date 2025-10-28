@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
+import BackToHomeLink from '../../../components/BackToHomeLink';
 import { useAuth } from '../../../components/AuthProvider';
 import { cn } from '../../../lib/utils';
 
@@ -294,17 +295,10 @@ export default function ConversationPage() {
 
   return (
     <main className="relative mx-auto flex min-h-screen w-full max-w-4xl flex-col px-4 pb-36 pt-10 sm:pt-16">
+      <div className="mb-6 sm:mb-8">
+        <BackToHomeLink />
+      </div>
       <header className="glass flex flex-col gap-4 px-6 py-6 sm:flex-row sm:items-center sm:justify-between">
-        <button
-          type="button"
-          onClick={() => router.push('/')}
-          className="inline-flex w-fit items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-fg/80 transition hover:border-white/40 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
-        >
-          <span aria-hidden="true" className="text-base">
-            ←
-          </span>
-          <span>На главную</span>
-        </button>
         <div className="flex flex-col gap-1 text-sm text-fg/70">
           <span className="text-xs uppercase tracking-[0.3em] text-fg/50">Беседа</span>
           <h1 className="text-xl font-semibold text-fg">{companionName}</h1>

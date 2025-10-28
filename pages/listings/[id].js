@@ -1,5 +1,4 @@
 import Head from 'next/head';
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
@@ -72,12 +71,17 @@ export default function ListingDetailsPage() {
       return;
     }
 
+    if (!guestMessage.trim()) {
+      setStatusMessage({ type: 'error', text: 'Пожалуйста, напишите сообщение хозяину.', conversationId: null });
+      return;
+    }
+
     const { error: requestError, conversationId } = await sendRequest({
       listingId: listing?.id,
       hostId: listing?.host_id,
       startDate,
       endDate,
-      message: guestMessage
+      message: guestMessage.trim()
     });
 
     if (requestError) {
@@ -93,12 +97,6 @@ export default function ListingDetailsPage() {
     setStartDate('');
     setEndDate('');
     setGuestMessage('');
-    setStatusMessage({ type: 'success', text: 'Заявка отправлена', conversationId });
-
-    if (typeof window !== 'undefined') {
-      window.alert('Заявка отправлена');
-    }
-
     router.push(`/chat/${conversationId}`);
   };
 
@@ -260,6 +258,7 @@ export default function ListingDetailsPage() {
                       rows={4}
                       placeholder="Расскажите немного о себе и цели поездки"
                       className="w-full rounded-2xl border border-white/20 bg-white/5 px-3 py-3 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+                      required
                     />
                   </label>
                   <Button type="submit" disabled={isSendingRequest} className="self-start">
@@ -268,16 +267,6 @@ export default function ListingDetailsPage() {
                 </form>
                 {statusMessage.type === 'error' ? (
                   <p className="text-sm text-red-400">{statusMessage.text}</p>
-                ) : null}
-                {statusMessage.type === 'success' ? (
-                  <div className="flex flex-col gap-3 rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-4 text-sm text-emerald-200">
-                    <p>{statusMessage.text}</p>
-                    {statusMessage.conversationId ? (
-                      <Button asChild className="w-fit">
-                        <Link href={`/chat/${statusMessage.conversationId}`}>Перейти в чат с хозяином</Link>
-                      </Button>
-                    ) : null}
-                  </div>
                 ) : null}
               </section>
             )}
