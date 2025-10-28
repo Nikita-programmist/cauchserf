@@ -62,6 +62,11 @@ export function Navbar() {
               {link.label}
             </a>
           ))}
+          {isHost ? (
+            <Link href="/requests" className="text-sm text-fg/80 hover:text-fg">
+              Заявки
+            </Link>
+          ) : null}
           <Popover triggerLabel="Больше">
             <div className="flex flex-col gap-2 text-sm text-fg/90">
               <a href="#safety" className="rounded-md px-2 py-1 hover:bg-white/10">
@@ -110,6 +115,11 @@ export function Navbar() {
               ) : null}
               <Popover triggerLabel="Аккаунт">
                 <div className="flex flex-col gap-2 text-sm text-fg/90">
+                  {isHost ? (
+                    <Link href="/requests" className="rounded-md px-2 py-1 hover:bg-white/10">
+                      Заявки
+                    </Link>
+                  ) : null}
                   <Link href="/profile" className="rounded-md px-2 py-1 hover:bg-white/10">
                     Профиль
                   </Link>
@@ -141,6 +151,11 @@ export function Navbar() {
               {link.label}
             </a>
           ))}
+          {isHost ? (
+            <Link href="/requests" className="rounded-lg px-3 py-2 hover:bg-white/10">
+              Заявки
+            </Link>
+          ) : null}
           <a href="#safety" className="rounded-lg px-3 py-2 hover:bg-white/10">
             Безопасность
           </a>
@@ -180,14 +195,19 @@ export function Navbar() {
                     {roleLabel}
                   </div>
                 ) : null}
+              <Button variant="ghost" className="w-full" asChild>
+                <Link href="/profile">Профиль</Link>
+              </Button>
+              {isHost ? (
                 <Button variant="ghost" className="w-full" asChild>
-                  <Link href="/profile">Профиль</Link>
+                  <Link href="/requests">Заявки</Link>
                 </Button>
-                <Button variant="glass" className="w-full" asChild>
-                  <Link href="/search">Найти жильё</Link>
-                </Button>
-                {isHost ? (
-                  <>
+              ) : null}
+              <Button variant="glass" className="w-full" asChild>
+                <Link href="/search">Найти жильё</Link>
+              </Button>
+              {isHost ? (
+                <>
                     <Button variant="ghost" className="w-full" asChild>
                       <Link href="/host/listings/new">Сдать жильё</Link>
                     </Button>

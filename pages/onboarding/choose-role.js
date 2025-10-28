@@ -2,6 +2,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
+import BackToHomeLink from '../../components/BackToHomeLink';
 import { supabase } from '../../lib/supabaseClient';
 
 export default function ChooseRolePage() {
@@ -66,6 +67,7 @@ export default function ChooseRolePage() {
         <title>Выберите роль — Домик</title>
       </Head>
       <main className="mx-auto mt-16 flex w-full max-w-3xl flex-col gap-6 px-6">
+        <BackToHomeLink className="self-start" />
         <div className="glass flex flex-col gap-6 px-8 py-10">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-fg/60">Шаг 1</p>
