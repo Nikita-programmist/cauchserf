@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
 import { useAuth } from '../../components/AuthProvider';
-import BackToHome from '../../components/BackToHome';
+import BackToHomeLink from '../../components/BackToHomeLink';
 import { Button } from '../../components/ui/button';
 import { useSendRequest } from '../../hooks/useSendRequest';
 
@@ -79,7 +79,7 @@ export default function ListingDetailsPage() {
     setStartDate('');
     setEndDate('');
     setGuestMessage('');
-    setStatusMessage({ type: 'success', text: 'Заявка отправлена хозяину.' });
+    setStatusMessage({ type: 'success', text: 'Заявка отправлена хозяину' });
   };
 
   useEffect(() => {
@@ -149,7 +149,7 @@ export default function ListingDetailsPage() {
         <title>{listing?.title ? `${listing.title} — Домик` : 'Объявление — Домик'}</title>
       </Head>
       <main className="mx-auto mt-16 flex w-full max-w-5xl flex-col gap-8 px-6 pb-16">
-        <BackToHome className="self-start" />
+        <BackToHomeLink className="self-start" />
         {loading ? (
           <section className="glass px-8 py-10 text-sm text-fg/70">Загружаем объявление…</section>
         ) : null}
@@ -199,68 +199,60 @@ export default function ListingDetailsPage() {
                 </div>
               </div>
             </article>
-            <section className="glass flex flex-col gap-6 px-8 py-10">
-              <div>
-                <h2 className="text-lg font-semibold text-fg">План поездки</h2>
-                <p className="mt-1 text-sm text-fg/70">Расскажите, когда хотите приехать и пару слов о поездке.</p>
-              </div>
-              {isHostViewing ? (
-                <p className="rounded-2xl border border-white/15 bg-white/5 px-4 py-4 text-sm text-fg/70">
-                  Это ваше объявление. Гости увидят здесь форму для заявки на проживание.
-                </p>
-              ) : (
-                <>
-                  <form className="flex flex-col gap-5" onSubmit={handleRequestSubmit}>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <label className="flex flex-col gap-2 text-sm text-fg/80">
-                        Дата заезда
-                        <input
-                          type="date"
-                          value={startDate}
-                          onChange={handleStartDateChange}
-                          required
-                          className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg focus:border-white/60 focus:outline-none"
-                        />
-                      </label>
-                      <label className="flex flex-col gap-2 text-sm text-fg/80">
-                        Дата выезда
-                        <input
-                          type="date"
-                          value={endDate}
-                          onChange={handleEndDateChange}
-                          required
-                          className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg focus:border-white/60 focus:outline-none"
-                        />
-                      </label>
-                    </div>
+            {isHostViewing ? (
+              <section className="glass px-8 py-8 text-sm text-fg/70">
+                Это ваше объявление. Путешественники смогут попроситься в гости и вы увидите их заявки во вкладке «Заявки».
+              </section>
+            ) : (
+              <section className="glass flex flex-col gap-6 px-8 py-10">
+                <div>
+                  <h2 className="text-lg font-semibold text-fg">План поездки</h2>
+                  <p className="mt-1 text-sm text-fg/70">Расскажите, когда хотите приехать и пару слов о поездке.</p>
+                </div>
+                <form className="flex flex-col gap-5" onSubmit={handleRequestSubmit}>
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <label className="flex flex-col gap-2 text-sm text-fg/80">
-                      Сообщение хозяину
-                      <textarea
-                        value={guestMessage}
-                        onChange={handleMessageChange}
-                        rows={4}
-                        placeholder="Расскажите немного о себе и цели поездки"
-                        className="w-full rounded-2xl border border-white/20 bg-white/5 px-3 py-3 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+                      Дата заезда
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={handleStartDateChange}
+                        required
+                        className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg focus:border-white/60 focus:outline-none"
                       />
                     </label>
-                    <Button
-                      type="submit"
-                      disabled={isSendingRequest}
-                      className="self-start"
-                    >
-                      {isSendingRequest ? 'Отправляем…' : 'Попроситься в гости'}
-                    </Button>
-                  </form>
-                  {statusMessage.type !== 'idle' ? (
-                    <p
-                      className={`text-sm ${statusMessage.type === 'success' ? 'text-emerald-300' : 'text-red-400'}`}
-                    >
-                      {statusMessage.text}
-                    </p>
-                  ) : null}
-                </>
-              )}
-            </section>
+                    <label className="flex flex-col gap-2 text-sm text-fg/80">
+                      Дата выезда
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={handleEndDateChange}
+                        required
+                        className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg focus:border-white/60 focus:outline-none"
+                      />
+                    </label>
+                  </div>
+                  <label className="flex flex-col gap-2 text-sm text-fg/80">
+                    Сообщение хозяину
+                    <textarea
+                      value={guestMessage}
+                      onChange={handleMessageChange}
+                      rows={4}
+                      placeholder="Расскажите немного о себе и цели поездки"
+                      className="w-full rounded-2xl border border-white/20 bg-white/5 px-3 py-3 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+                    />
+                  </label>
+                  <Button type="submit" disabled={isSendingRequest} className="self-start">
+                    {isSendingRequest ? 'Отправляем…' : 'Попроситься в гости'}
+                  </Button>
+                </form>
+                {statusMessage.type !== 'idle' ? (
+                  <p className={`text-sm ${statusMessage.type === 'success' ? 'text-emerald-300' : 'text-red-400'}`}>
+                    {statusMessage.text}
+                  </p>
+                ) : null}
+              </section>
+            )}
           </>
         ) : null}
       </main>

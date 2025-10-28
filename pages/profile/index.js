@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
 import { supabase } from '../../lib/supabaseClient';
-import BackToHome from '../../components/BackToHome';
+import BackToHomeLink from '../../components/BackToHomeLink';
 
 const genderLabels = {
   male: 'Мужской',
@@ -82,7 +82,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <main className="mx-auto mt-16 flex w-full max-w-2xl flex-col gap-6 px-6">
-        <BackToHome className="self-start" />
+        <BackToHomeLink className="self-start" />
         <div className="glass px-8 py-10 text-center text-sm text-fg/70">Загружаем профиль…</div>
       </main>
     );
@@ -91,7 +91,7 @@ export default function ProfilePage() {
   if (error) {
     return (
       <main className="mx-auto mt-16 flex w-full max-w-2xl flex-col gap-6 px-6">
-        <BackToHome className="self-start" />
+        <BackToHomeLink className="self-start" />
         <div className="glass px-8 py-10 text-center text-sm text-red-400">{error}</div>
       </main>
     );
@@ -103,7 +103,7 @@ export default function ProfilePage() {
         <title>Профиль — Домик</title>
       </Head>
       <main className="mx-auto mt-16 flex w-full max-w-2xl flex-col gap-6 px-6">
-        <BackToHome className="self-start" />
+        <BackToHomeLink className="self-start" />
         <div className="glass flex flex-col gap-6 px-8 py-10">
           <div className="flex flex-col gap-3">
             <p className="text-xs uppercase tracking-[0.3em] text-fg/60">Ваш профиль</p>

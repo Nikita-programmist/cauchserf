@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
 import { supabase } from '../../lib/supabaseClient';
-import BackToHome from '../../components/BackToHome';
+import BackToHomeLink from '../../components/BackToHomeLink';
 import AvatarUploader from '../../components/AvatarUploader';
 
 const genderOptions = [
@@ -160,7 +160,7 @@ export default function HostOnboardingPage() {
   if (loading) {
     return (
       <main className="mx-auto mt-16 flex w-full max-w-2xl flex-col gap-6 px-6">
-        <BackToHome className="self-start" />
+        <BackToHomeLink className="self-start" />
         <div className="glass px-8 py-10 text-center text-sm text-fg/70">Загружаем…</div>
       </main>
     );
@@ -172,7 +172,7 @@ export default function HostOnboardingPage() {
         <title>Анкета хозяина — Домик</title>
       </Head>
       <main className="mx-auto mt-16 flex w-full max-w-2xl flex-col gap-6 px-6">
-        <BackToHome className="self-start" />
+        <BackToHomeLink className="self-start" />
         <div className="glass flex flex-col gap-6 px-8 py-10">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-fg/60">Шаг 2</p>
