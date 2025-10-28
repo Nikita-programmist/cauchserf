@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { supabase } from '../../lib/supabaseClient';
 import BackToHomeLink from '../../components/BackToHomeLink';
-import AvatarUploader from '../../components/AvatarUploader';
+import UploadField from '../../components/UploadField';
 
 const genderOptions = [
   { value: '', label: 'Выберите пол' },
@@ -267,7 +267,7 @@ export default function HostOnboardingPage() {
             </label>
             <div className="flex flex-col gap-2 text-sm text-fg/80">
               <span>Аватар</span>
-              <AvatarUploader initialPreviewUrl={existingAvatarUrl} onFileChange={handleFileChange} />
+              <UploadField initialPreviewUrl={existingAvatarUrl} onFilesChange={handleFileChange} />
             </div>
             {error ? <p className="text-sm text-red-400">{error}</p> : null}
             <button

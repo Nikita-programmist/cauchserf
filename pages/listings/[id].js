@@ -85,10 +85,21 @@ export default function ListingDetailsPage() {
       return;
     }
 
+    if (!conversationId) {
+      setStatusMessage({ type: 'error', text: 'Не получилось открыть чат. Попробуйте позже.', conversationId: null });
+      return;
+    }
+
     setStartDate('');
     setEndDate('');
     setGuestMessage('');
-    setStatusMessage({ type: 'success', text: 'Заявка отправлена', conversationId: conversationId ?? null });
+    setStatusMessage({ type: 'success', text: 'Заявка отправлена', conversationId });
+
+    if (typeof window !== 'undefined') {
+      window.alert('Заявка отправлена');
+    }
+
+    router.push(`/chat/${conversationId}`);
   };
 
   useEffect(() => {
