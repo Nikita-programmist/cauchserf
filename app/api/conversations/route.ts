@@ -1,9 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { listConversationsForUser, ChatServiceError } from '../../../lib/chatService';
+import { NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/supabaseServer';
+import { ChatServiceError, listConversationsForUser } from '@/lib/chatService';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
-    const conversations = await listConversationsForUser(req);
+    const conversations = await listConversationsForUser(user.id);
     return NextResponse.json(conversations);
   } catch (error) {
     if (error instanceof ChatServiceError) {

@@ -1,6 +1,8 @@
+'use client';
+
 import { useEffect } from 'react';
 import type { RealtimePostgresInsertPayload, RealtimePostgresUpdatePayload } from '@supabase/supabase-js';
-import { getSupabaseClient } from '../lib/supabaseClient';
+import { getSupabaseClient } from '@/lib/supabaseClient';
 
 type MessageRecord = {
   id: string;
@@ -11,7 +13,7 @@ type MessageRecord = {
   read_at: string | null;
 };
 
-type MessageCallbackPayload = {
+type MessagePayload = {
   id: string;
   conversationId: string;
   senderId: string;
@@ -20,7 +22,7 @@ type MessageCallbackPayload = {
   readAt: string | null;
 };
 
-function mapPayload(row: MessageRecord): MessageCallbackPayload {
+function mapRow(row: MessageRecord): MessagePayload {
   return {
     id: row.id,
     conversationId: row.conversation_id,
@@ -32,9 +34,9 @@ function mapPayload(row: MessageRecord): MessageCallbackPayload {
 }
 
 export function useRealtimeConversation(
-  conversationId: string | null,
-  onNewMessage: (message: MessageCallbackPayload) => void,
-  onRead?: (readerId: string) => void
+  conversationId: string | null | undefined,
+  onNewMessage: (message: MessagePayload) => void,
+  onMessageUpdate?: (message: MessagePayload) => void
 ) {
   useEffect(() => {
     if (!conversationId) {
@@ -42,9 +44,6 @@ export function useRealtimeConversation(
     }
 
     const supabase = getSupabaseClient();
-    if (!supabase) {
-      return;
-    }
 
     const channel = supabase
       .channel(`conversation:${conversationId}`)
@@ -57,9 +56,8 @@ export function useRealtimeConversation(
           filter: `conversation_id=eq.${conversationId}`
         },
         (payload: RealtimePostgresInsertPayload<MessageRecord>) => {
-          const row = payload.new;
-          if (!row) return;
-          onNewMessage(mapPayload(row));
+          if (!payload.new) return;
+          onNewMessage(mapRow(payload.new));
         }
       )
       .on(
@@ -71,12 +69,9 @@ export function useRealtimeConversation(
           filter: `conversation_id=eq.${conversationId}`
         },
         (payload: RealtimePostgresUpdatePayload<MessageRecord>) => {
-          const row = payload.new;
-          if (!row) return;
-          onNewMessage(mapPayload(row));
-          if (row.read_at && onRead) {
-            onRead(row.sender_id);
-          }
+          if (!payload.new) return;
+          const mapped = mapRow(payload.new);
+          onMessageUpdate?.(mapped);
         }
       )
       .subscribe();
@@ -84,5 +79,5 @@ export function useRealtimeConversation(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [conversationId, onNewMessage, onRead]);
+  }, [conversationId, onMessageUpdate, onNewMessage]);
 }
