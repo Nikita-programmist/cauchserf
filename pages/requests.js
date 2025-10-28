@@ -77,7 +77,30 @@ export default function RequestsPage() {
 
       const { data: requestsData, error: requestsError } = await supabase
         .from('stay_requests')
-        .select('id, listing_id, traveler_id, start_date, end_date, message, status, created_at, conversation_id')
+        .select(
+          `
+            id,
+            listing_id,
+            traveler_id,
+            start_date,
+            end_date,
+            message,
+            status,
+            created_at,
+            conversation_id,
+            traveler:traveler_id (
+              id,
+              first_name,
+              last_name,
+              city,
+              age,
+              gender,
+              bio,
+              avatar_url,
+              role
+            )
+          `
+        )
         .eq('host_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -89,41 +112,7 @@ export default function RequestsPage() {
         return;
       }
 
-      if (!requestsData || requestsData.length === 0) {
-        setRequests([]);
-        setLoading(false);
-        return;
-      }
-
-      const travelerIds = Array.from(
-        new Set(requestsData.map((request) => request.traveler_id).filter(Boolean))
-      );
-
-      let travelerProfilesMap = new Map();
-
-      if (travelerIds.length > 0) {
-        const { data: travelerProfiles, error: travelerError } = await supabase
-          .from('profiles')
-          .select('id, first_name, last_name, city, age, gender, bio, avatar_url, role')
-          .in('id', travelerIds);
-
-        if (!isMounted) return;
-
-        if (travelerError) {
-          setError(travelerError.message);
-          setLoading(false);
-          return;
-        }
-
-        travelerProfilesMap = new Map((travelerProfiles ?? []).map((item) => [item.id, item]));
-      }
-
-      const enrichedRequests = requestsData.map((request) => ({
-        ...request,
-        travelerProfile: travelerProfilesMap.get(request.traveler_id) ?? null
-      }));
-
-      setRequests(enrichedRequests);
+      setRequests(requestsData ?? []);
       setLoading(false);
     };
 
@@ -178,7 +167,7 @@ export default function RequestsPage() {
         ) : (
           <div className="flex flex-col gap-6">
             {requests.map((request) => {
-              const traveler = request.travelerProfile;
+              const traveler = request.traveler;
               const fullName = `${traveler?.first_name ?? ''} ${traveler?.last_name ?? ''}`.trim() || 'Без имени';
               const city = traveler?.city ?? '';
               const age = traveler?.age != null ? String(traveler.age) : '';

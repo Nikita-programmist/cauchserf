@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
 import { useAuth } from '../../../components/AuthProvider';
+import UploadField from '../../../components/UploadField';
 import { Button } from '../../../components/ui/button';
 
 const initialFormState = {
@@ -80,10 +81,10 @@ export default function NewListingPage() {
     setForm((prev) => ({ ...prev, guests: Math.min(10, Math.max(1, value || 1)) }));
   };
 
-  const handlePhotosChange = (event) => {
-    const files = Array.from(event.target.files ?? []);
-    if (files.length > 4) {
-      alert('Можно загрузить не более 4 фотографий.');
+  const handlePhotosChange = (files) => {
+    if (!Array.isArray(files)) {
+      setPhotoFiles([]);
+      return;
     }
     setPhotoFiles(files.slice(0, 4));
   };
@@ -245,23 +246,16 @@ export default function NewListingPage() {
                 className="w-28 rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-sm text-fg focus:border-white/60 focus:outline-none"
               />
             </label>
-            <label className="flex flex-col gap-2 text-sm text-fg/80">
+            <div className="flex flex-col gap-2 text-sm text-fg/80">
               <span>Фотографии (до 4)</span>
-              <input
-                type="file"
-                accept="image/*"
+              <UploadField
                 multiple
-                onChange={handlePhotosChange}
-                className="rounded-xl border border-dashed border-white/30 bg-white/5 px-4 py-4 text-sm text-fg/70 file:mr-4 file:rounded-lg file:border-0 file:bg-white/80 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-900 hover:border-white/50"
+                maxFiles={4}
+                onFilesChange={handlePhotosChange}
+                onLimitExceeded={() => alert('Можно загрузить не более 4 фотографий.')}
+                helperText="Можно загрузить до 4 фотографий."
               />
-              {photoFiles.length ? (
-                <ul className="text-xs text-fg/60">
-                  {photoFiles.map((file) => (
-                    <li key={file.name}>{file.name}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </label>
+            </div>
             <div className="flex items-center gap-3">
               <Button type="submit" disabled={submitting || checkingAccess}>
                 {submitting ? 'Сохраняем…' : 'Опубликовать'}

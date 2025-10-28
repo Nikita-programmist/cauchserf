@@ -55,6 +55,7 @@ export function useSendRequest() {
       }
 
       let conversationId = existingConversation?.id ?? null;
+      const trimmedMessage = message?.trim() ?? '';
 
       if (!conversationId) {
         const { data: newConversation, error: conversationCreateError } = await supabase
@@ -108,7 +109,7 @@ export function useSendRequest() {
         traveler_id: user.id,
         start_date: startDate,
         end_date: endDate,
-        message: message?.trim() || null,
+        message: trimmedMessage || null,
         conversation_id: conversationId
       });
 
@@ -116,6 +117,20 @@ export function useSendRequest() {
         setError(insertError.message);
         setStatus('error');
         return { error: insertError };
+      }
+
+      if (trimmedMessage) {
+        const { error: messageInsertError } = await supabase.from('messages').insert({
+          conversation_id: conversationId,
+          sender_id: user.id,
+          text: trimmedMessage
+        });
+
+        if (messageInsertError) {
+          setError(messageInsertError.message);
+          setStatus('error');
+          return { error: messageInsertError, conversationId };
+        }
       }
 
       setStatus('success');
