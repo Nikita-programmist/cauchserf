@@ -27,7 +27,7 @@ export default function ChatWindow({
   const [messageText, setMessageText] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // грузим историю чата
+  // 1. тянем историю чата
   useEffect(() => {
     (async () => {
       const res = await fetch(`/api/conversations/${conversationId}`, {
@@ -37,7 +37,7 @@ export default function ChatWindow({
       const data = await res.json();
       setChat(data);
 
-      // сразу помечаем входящее как прочитанное
+      // сразу помечаем входящие сообщения как прочитанные
       await fetch(`/api/conversations/${conversationId}/read`, {
         method: 'POST',
         credentials: 'include',
@@ -45,16 +45,16 @@ export default function ChatWindow({
     })();
   }, [conversationId]);
 
-  // автоскролл вниз когда сообщения обновились
+  // 2. автоскролл вниз при новых сообщениях
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chat?.messages]);
 
-  // новое сообщение прилетело через realtime INSERT
+  // 3. входящий месседж (INSERT в messages)
   const handleNewMessage = useCallback((row: any) => {
-    setChat((prev) => {
+    setChat(prev => {
       if (!prev) return prev;
-      if (prev.messages.find((m) => m.id === row.id)) return prev;
+      if (prev.messages.find(m => m.id === row.id)) return prev;
       return {
         ...prev,
         messages: [
@@ -71,34 +71,32 @@ export default function ChatWindow({
     });
   }, []);
 
-  // кто-то обновил read_at через realtime UPDATE
+  // 4. апдейт read_at (UPDATE в messages)
   const handleUpdateMessage = useCallback((row: any) => {
-    setChat((prev) => {
+    setChat(prev => {
       if (!prev) return prev;
       return {
         ...prev,
-        messages: prev.messages.map((m) =>
-          m.id === row.id
-            ? { ...m, readAt: row.read_at }
-            : m
+        messages: prev.messages.map(m =>
+          m.id === row.id ? { ...m, readAt: row.read_at } : m
         ),
       };
     });
   }, []);
 
-  // подписываемся на realtime канал
+  // 5. realtime подписка
   useRealtimeConversation(
     conversationId,
     handleNewMessage,
     handleUpdateMessage
   );
 
-  // отправка сообщения
+  // 6. отправка сообщения
   async function send() {
     const txt = messageText.trim();
     if (!txt || !chat) return;
 
-    // оптимистично кидаем сообщение в стейт
+    // оптимистичный пуш
     const tempId = 'local-' + Date.now().toString();
     const optimisticMsg = {
       id: tempId,
@@ -108,14 +106,14 @@ export default function ChatWindow({
       readAt: null,
     };
 
-    setChat((prev) =>
+    setChat(prev =>
       prev
         ? { ...prev, messages: [...prev.messages, optimisticMsg] }
         : prev
     );
     setMessageText('');
 
-    // реальный POST -> API
+    // реальный запрос на API
     const res = await fetch(
       `/api/conversations/${conversationId}/send`,
       {
@@ -127,12 +125,12 @@ export default function ChatWindow({
     );
     const realMsg = await res.json();
 
-    // заменяем временный id на реальный id и timestamp
-    setChat((prev) => {
+    // заменяем временный id на реальный
+    setChat(prev => {
       if (!prev) return prev;
       return {
         ...prev,
-        messages: prev.messages.map((m) =>
+        messages: prev.messages.map(m =>
           m.id === tempId
             ? {
                 ...m,
@@ -144,7 +142,7 @@ export default function ChatWindow({
       };
     });
 
-    // и снова гасим непрочитанные (прочитано)
+    // снова сразу маркируем прочитанное
     await fetch(`/api/conversations/${conversationId}/read`, {
       method: 'POST',
       credentials: 'include',
@@ -158,6 +156,7 @@ export default function ChatWindow({
     }
   }
 
+  // 7. лоадер
   if (!chat) {
     return (
       <div className="flex-1 flex items-center justify-center text-neutral-500">
@@ -166,9 +165,10 @@ export default function ChatWindow({
     );
   }
 
+  // 8. UI
   return (
     <div className="flex flex-col flex-1 h-full bg-white">
-      {/* Хедер */}
+      {/* Шапка с инфой о собеседнике */}
       <div className="flex items-center gap-2 p-3 border-b bg-white">
         <div className="w-10 h-10 rounded-full bg-neutral-300 overflow-hidden flex items-center justify-center text-sm font-semibold">
           {chat.otherUser.avatarUrl ? (
@@ -192,9 +192,9 @@ export default function ChatWindow({
         </div>
       </div>
 
-      {/* Сообщения */}
+      {/* Лента сообщений */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-neutral-50">
-        {chat.messages.map((m) => {
+        {chat.messages.map(m => {
           const mine = m.senderId === currentUserId;
           return (
             <div
@@ -232,7 +232,7 @@ export default function ChatWindow({
           rows={1}
           placeholder="Напиши сообщение..."
           value={messageText}
-          onChange={(e) => setMessageText(e.target.value)}
+          onChange={e => setMessageText(e.target.value)}
           onKeyDown={onKeyDown}
         />
         <button
