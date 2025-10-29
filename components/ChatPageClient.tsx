@@ -1,60 +1,44 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import ChatWindow from '@/components/ChatWindow';
 import ConversationList from '@/components/ConversationList';
+import ChatWindow from '@/components/ChatWindow';
 
-type Props = {
+export default function ChatPageClient({
+  currentUserId,
+}: {
   currentUserId: string;
-};
+}) {
+  const [activeId, setActiveId] = useState<string>('');
 
-type ConversationSummary = {
-  id: string;
-};
-
-export default function ChatPageClient({ currentUserId }: Props) {
-  const [activeId, setActiveId] = useState<string | null>(null);
-
+  // Автооткрытие первого диалога, чтобы не было пустого экрана
   useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        const res = await fetch('/api/conversations', { credentials: 'include' });
-        if (!res.ok) return;
-        const data = (await res.json()) as ConversationSummary[];
-        if (!mounted) return;
-        if (data.length > 0) {
-          setActiveId((prev) => prev ?? data[0].id);
-        }
-      } catch (error) {
-        // swallow error silently; list component handles messaging
-        console.error('Failed to preselect conversation', error);
+    (async () => {
+      if (activeId) return;
+      const res = await fetch('/api/conversations', {
+        method: 'GET',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (Array.isArray(data) && data[0]?.id) {
+        setActiveId(data[0].id);
       }
-    };
-
-    load();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+    })();
+  }, [activeId]);
 
   return (
-    <div className="flex h-[calc(100vh-2rem)] overflow-hidden rounded-lg border bg-white shadow-sm">
-      <div className="w-64 max-w-64 flex-none bg-white">
-        <ConversationList
-          onSelect={(conversationId) => {
-            setActiveId(conversationId);
-          }}
+    <div className="flex h-[calc(100vh-2rem)] border rounded-lg overflow-hidden bg-white">
+      <ConversationList onSelect={(id) => setActiveId(id)} />
+      {activeId ? (
+        <ChatWindow
+          conversationId={activeId}
+          currentUserId={currentUserId}
         />
-      </div>
-      <div className="flex flex-1 bg-neutral-50">
-        {activeId ? (
-          <ChatWindow conversationId={activeId} currentUserId={currentUserId} />
-        ) : (
-          <div className="flex flex-1 items-center justify-center text-sm text-neutral-500">Выбери диалог слева</div>
-        )}
-      </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-neutral-400 text-sm">
+          Выбери диалог слева
+        </div>
+      )}
     </div>
   );
 }
