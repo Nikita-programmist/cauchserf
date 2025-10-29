@@ -1,152 +1,116 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { cn } from '../../lib/utils';
-
-type ConversationListItem = {
-  id: string;
-  lastMessageText: string | null;
-  lastMessageAt: string | null;
-  otherUser: {
-    id: string;
-    name: string | null;
-    avatarUrl: string | null;
-  };
-  unreadCount: number;
-};
+import { useEffect, useState } from 'react';
 
 type ConversationListProps = {
   onSelect: (conversationId: string) => void;
-  selectedConversationId?: string | null;
+  selectedConversationId: string | null;
 };
 
-function timeAgo(value: string | null): string {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
+type ConversationListItem = {
+  id: string;
+  otherUser: {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+  };
+  lastMessageText: string;
+  lastMessageAt: string | null;
+};
 
-  const now = Date.now();
-  const diff = Math.max(0, now - date.getTime());
-  const minute = 60 * 1000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-
-  if (diff < minute) {
-    return 'только что';
-  }
-  if (diff < hour) {
-    const minutes = Math.floor(diff / minute);
-    return `${minutes} мин назад`;
-  }
-  if (diff < day) {
-    const hours = Math.floor(diff / hour);
-    return `${hours} ч назад`;
-  }
-  return date.toLocaleDateString('ru-RU');
-}
-
-export default function ConversationList({ onSelect, selectedConversationId }: ConversationListProps) {
+export default function ConversationList({
+  onSelect,
+  selectedConversationId,
+}: ConversationListProps) {
   const [items, setItems] = useState<ConversationListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
   useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError('');
-
-    const load = async () => {
+    async function load() {
       try {
-        const response = await fetch('/api/conversations');
-        if (!response.ok) {
-          const payload = await response.json().catch(() => ({ error: 'Не удалось загрузить чаты' }));
-          throw new Error(payload.error ?? 'Не удалось загрузить чаты');
+        const res = await fetch('/api/conversations', {
+          method: 'GET',
+          credentials: 'include',
+        });
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setItems(data);
+        } else {
+          setItems([]);
         }
-        const data = (await response.json()) as ConversationListItem[];
-        if (!active) return;
-        setItems(data);
-      } catch (err) {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : 'Не удалось загрузить чаты');
+      } catch (e) {
+        setItems([]);
       } finally {
-        if (!active) return;
         setLoading(false);
       }
-    };
-
+    }
     load();
-
-    return () => {
-      active = false;
-    };
   }, []);
 
-  const content = useMemo(() => {
-    if (loading) {
-      return <p className="px-4 py-6 text-sm text-fg/70">Загружаем чаты…</p>;
-    }
-
-    if (error) {
-      return (
-        <div className="px-4 py-6 text-sm text-red-400">
-          <p>{error}</p>
-        </div>
-      );
-    }
-
-    if (items.length === 0) {
-      return <p className="px-4 py-6 text-sm text-fg/60">Чатов пока нет.</p>;
-    }
-
+  if (loading) {
     return (
-      <ul className="flex flex-col">
-        {items.map((item) => {
-          const isActive = item.id === selectedConversationId;
-          const name = item.otherUser.name ?? 'Без имени';
-          const lastMessage = item.lastMessageText?.trim() || 'Нет сообщений';
-          const timestamp = timeAgo(item.lastMessageAt);
-
-          return (
-            <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(item.id)}
-                className={cn(
-                  'flex w-full items-center gap-3 px-4 py-3 text-left transition',
-                  'hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40',
-                  isActive ? 'bg-white/10' : ''
-                )}
-              >
-                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
-                  {item.otherUser.avatarUrl ? (
-                    <img src={item.otherUser.avatarUrl} alt={name} className="h-full w-full object-cover" />
-                  ) : (
-                    <span className="text-sm font-semibold text-fg/80">{name.charAt(0).toUpperCase()}</span>
-                  )}
-                </div>
-                <div className="flex flex-1 flex-col gap-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-fg">{name}</p>
-                    {timestamp && <span className="text-xs text-fg/60">{timestamp}</span>}
-                  </div>
-                  <div className="flex items-center justify-between gap-2 text-xs text-fg/70">
-                    <p className="line-clamp-1 flex-1">{lastMessage}</p>
-                    {item.unreadCount > 0 && (
-                      <span className="inline-flex min-w-[1.5rem] justify-center rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-medium text-white">
-                        {item.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      <div className="text-sm text-neutral-500 p-4">
+        Загрузка диалогов...
+      </div>
     );
-  }, [error, items, loading, onSelect, selectedConversationId]);
+  }
 
-  return <div className="glass h-full w-full max-w-sm overflow-hidden rounded-3xl border border-white/15 bg-white/5">{content}</div>;
+  if (items.length === 0) {
+    return (
+      <div className="text-sm text-neutral-500 p-4">
+        Пока нет диалогов.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col divide-y divide-neutral-200 bg-white rounded-lg border border-neutral-200 overflow-hidden">
+      {items.map((item) => {
+        const active = item.id === selectedConversationId;
+        return (
+          <button
+            key={item.id}
+            onClick={() => onSelect(item.id)}
+            className={
+              'flex items-start gap-3 p-4 text-left w-full ' +
+              (active ? 'bg-blue-50' : 'bg-white hover:bg-neutral-50')
+            }
+          >
+            {/* Аватар / инициалы */}
+            <div className="w-10 h-10 rounded-full bg-neutral-300 overflow-hidden flex items-center justify-center text-sm font-medium text-white">
+              {item.otherUser.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={item.otherUser.avatarUrl}
+                  alt={item.otherUser.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>
+                  {item.otherUser.name
+                    ? item.otherUser.name[0]?.toUpperCase()
+                    : '?'}
+                </span>
+              )}
+            </div>
+
+            {/* Текст */}
+            <div className="flex-1 min-w-0">
+              <div className="text-[15px] font-semibold text-neutral-900 truncate">
+                {item.otherUser.name || 'Без имени'}
+              </div>
+              <div className="text-[13px] text-neutral-600 line-clamp-2 break-words">
+                {item.lastMessageText || 'Без сообщения'}
+              </div>
+              {item.lastMessageAt ? (
+                <div className="text-[11px] text-neutral-400 mt-1">
+                  {new Date(item.lastMessageAt).toLocaleString()}
+                </div>
+              ) : null}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
