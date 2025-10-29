@@ -4,9 +4,9 @@
 import { createBrowserClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+// Единственный браузерный клиент Supabase для фронта и realtime-хука
 let browserClient: SupabaseClient | null = null;
 
-// Клиентский supabase для React-компонентов (чат в браузере)
 export function getBrowserSupabase(): SupabaseClient {
   if (!browserClient) {
     browserClient = createBrowserClient(
