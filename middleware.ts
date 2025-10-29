@@ -1,44 +1,48 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-export async function middleware(req: NextRequest) {
-  const res = NextResponse.next({
-    request: {
-      headers: req.headers
-    }
-  });
+// Эта прослойка держит сессию Supabase живой между запросами,
+// чтобы API-роуты и Realtime знали кто пользователь.
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          // Обновляем куки в входящем запросе
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+          });
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return res;
-  }
+          // Пересоздаём ответ с новым состоянием куков
+          response = NextResponse.next({ request });
 
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      get(name: string) {
-        return req.cookies.get(name)?.value;
+          // Прокидываем куки наружу (в браузер)
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
       },
-      set(name: string, value: string, options?: Parameters<typeof res.cookies.set>[2]) {
-        res.cookies.set(name, value, options);
-      },
-      remove(name: string, options?: Parameters<typeof res.cookies.delete>[1]) {
-        res.cookies.delete(name, options);
-      }
     }
-  });
+  );
 
-  try {
-    await supabase.auth.getSession();
-  } catch (error) {
-    console.error('Supabase auth refresh error in middleware', error);
-  }
+  // Принудительно освежаем сессию пользователя,
+  // иначе Supabase может думать что юзер не залогинен.
+  await supabase.auth.getUser();
 
-  return res;
+  return response;
 }
 
+// Где запускать этот middleware
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)']
+  matcher: [
+    // всё, кроме статики и картинок
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 };
