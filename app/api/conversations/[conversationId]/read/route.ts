@@ -1,26 +1,24 @@
-import { NextResponse } from 'next/server';
+
+import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/supabaseServer';
-import { ChatServiceError, markConversationRead } from '@/lib/chatService';
+import { markConversationRead } from '@/lib/chatService';
 
 export async function POST(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: { conversationId: string } }
 ) {
   const user = await getCurrentUser();
-
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
   try {
-    const result = await markConversationRead(params.conversationId, user.id);
-    return NextResponse.json(result);
-  } catch (error) {
-    if (error instanceof ChatServiceError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+    const res = await markConversationRead(params.conversationId, user.id);
+    return NextResponse.json(res);
+  } catch (err: any) {
+    if (err.message === 'forbidden') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
-
-    console.error('Failed to mark conversation read', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }
 }
