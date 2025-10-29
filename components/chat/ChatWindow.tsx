@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -21,14 +20,14 @@ export default function ChatWindow({
   conversationId,
   currentUserId,
 }: {
-  conversationId: string;   // ВАЖНО: без "| null"
+  conversationId: string;
   currentUserId: string;
 }) {
   const [chat, setChat] = useState<ChatData | null>(null);
   const [messageText, setMessageText] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // подгружаем историю чата с сервера
+  // грузим историю чата
   useEffect(() => {
     (async () => {
       const res = await fetch(`/api/conversations/${conversationId}`, {
@@ -38,7 +37,7 @@ export default function ChatWindow({
       const data = await res.json();
       setChat(data);
 
-      // сразу говорим "я прочитал"
+      // сразу помечаем входящие как прочитанные
       await fetch(`/api/conversations/${conversationId}/read`, {
         method: 'POST',
         credentials: 'include',
@@ -46,12 +45,12 @@ export default function ChatWindow({
     })();
   }, [conversationId]);
 
-  // автоскролл вниз при новых сообщениях
+  // автоскролл вниз при сообщениях
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chat?.messages]);
 
-  // новый входящий месседж из realtime INSERT
+  // новое сообщение по realtime INSERT
   const handleNewMessage = useCallback((row: any) => {
     setChat((prev) => {
       if (!prev) return prev;
@@ -72,7 +71,7 @@ export default function ChatWindow({
     });
   }, []);
 
-  // апдейт read_at через realtime UPDATE
+  // апдейт read_at по realtime UPDATE
   const handleUpdateMessage = useCallback((row: any) => {
     setChat((prev) => {
       if (!prev) return prev;
@@ -99,7 +98,7 @@ export default function ChatWindow({
     const txt = messageText.trim();
     if (!txt || !chat) return;
 
-    // оптимистичное локальное сообщение
+    // оптимистично пихаем сообщение в стейт
     const tempId = 'local-' + Date.now().toString();
     const optimisticMsg = {
       id: tempId,
@@ -116,7 +115,7 @@ export default function ChatWindow({
     );
     setMessageText('');
 
-    // реальный POST на наш API
+    // шлём на наш API
     const res = await fetch(
       `/api/conversations/${conversationId}/send`,
       {
@@ -145,7 +144,7 @@ export default function ChatWindow({
       };
     });
 
-    // ещё раз помечаем входящие как прочитанные
+    // снова помечаем входящее как прочитанное
     await fetch(`/api/conversations/${conversationId}/read`, {
       method: 'POST',
       credentials: 'include',
