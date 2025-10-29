@@ -15,6 +15,13 @@ export type ChatRoomListItem = {
   unreadCount: number;
 };
 
+type ChatRoomRecord = {
+  id: string;
+  traveler_id: string;
+  host_id: string;
+  created_at: string;
+};
+
 export async function getCurrentUserProfile() {
   const supabase = getServerSupabase();
   const {
@@ -36,6 +43,51 @@ export async function getCurrentUserProfile() {
     display_name: profile.display_name ?? null,
     avatar_url: profile.avatar_url ?? null,
   } satisfies ProfileSummary;
+}
+
+export async function ensureChatRoom(
+  travelerId: string,
+  hostId: string
+): Promise<ChatRoomRecord> {
+  const supabase = getServerSupabase();
+
+  const { data: existingRoom, error: existingRoomError } = await supabase
+    .from('chat_rooms')
+    .select('id, traveler_id, host_id, created_at')
+    .or(
+      `and(traveler_id.eq.${travelerId},host_id.eq.${hostId}),and(traveler_id.eq.${hostId},host_id.eq.${travelerId})`
+    )
+    .maybeSingle();
+
+  if (existingRoomError) {
+    throw new Error(existingRoomError.message);
+  }
+
+  if (existingRoom) {
+    return {
+      id: existingRoom.id as string,
+      traveler_id: existingRoom.traveler_id as string,
+      host_id: existingRoom.host_id as string,
+      created_at: existingRoom.created_at as string,
+    };
+  }
+
+  const { data: insertedRoom, error: insertError } = await supabase
+    .from('chat_rooms')
+    .insert({ traveler_id: travelerId, host_id: hostId })
+    .select('id, traveler_id, host_id, created_at')
+    .single();
+
+  if (insertError || !insertedRoom) {
+    throw new Error(insertError?.message || 'Failed to create chat room');
+  }
+
+  return {
+    id: insertedRoom.id as string,
+    traveler_id: insertedRoom.traveler_id as string,
+    host_id: insertedRoom.host_id as string,
+    created_at: insertedRoom.created_at as string,
+  };
 }
 
 function normalizeProfile(fallbackId: string, raw: any): ProfileSummary {
