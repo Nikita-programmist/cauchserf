@@ -3,17 +3,33 @@
 import { createBrowserClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-let browserClient: SupabaseClient | null = null;
+type BrowserSupabaseClient = SupabaseClient<any, any, any>;
 
-export function getBrowserSupabase(): SupabaseClient {
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+export const hasSupabaseEnv = Boolean(supabaseUrl && supabaseAnonKey);
+
+let browserClient: BrowserSupabaseClient | null = null;
+
+export function getBrowserSupabase(): BrowserSupabaseClient {
   if (!browserClient) {
-    browserClient = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    if (!supabaseUrl || !supabaseAnonKey) {
+      browserClient = new Proxy({} as BrowserSupabaseClient, {
+        get() {
+          throw new Error('Supabase environment variables are not configured.');
+        },
+      });
+    } else {
+      browserClient = createBrowserClient(supabaseUrl, supabaseAnonKey);
+    }
   }
   return browserClient;
 }
 
+export function getSupabaseClient(): BrowserSupabaseClient | null {
+  return hasSupabaseEnv ? getBrowserSupabase() : null;
+}
+
 // старые страницы ожидают { supabase }
-export const supabase = getBrowserSupabase();
+export const supabase: BrowserSupabaseClient = getBrowserSupabase();
