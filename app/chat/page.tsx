@@ -1,13 +1,15 @@
-import ChatPageClient from '@/components/ChatPageClient';
 import { getCurrentUser } from '@/lib/supabaseServer';
+import ChatPageClient from '@/components/ChatPageClient';
 
 export default async function ChatPage() {
   const user = await getCurrentUser();
 
   if (!user) {
+    // если хочешь редирект на логин:
+    // redirect('/login')
     return (
-      <main className="p-4">
-        <p className="text-sm text-neutral-500">Для просмотра сообщений необходимо войти.</p>
+      <main className="p-4 text-sm text-neutral-500">
+        not logged in
       </main>
     );
   }
