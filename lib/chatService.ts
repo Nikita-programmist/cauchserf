@@ -164,6 +164,9 @@ export async function listConversationsForUser(userId: string) {
 
     result.push({
       id: conv.id,
+      conversationId: conv.id,
+      type: 'conversation',
+      requestId: null,
       lastMessageText: conv.last_message_text ?? '',
       lastMessageAt: conv.last_message_at ?? null,
       otherUser: {
@@ -299,4 +302,109 @@ export async function markConversationRead(
   if (error) throw error;
 
   return { ok: true };
+}
+
+export async function ensureConversationForStayRequest(
+  requestId: string,
+  userId: string
+) {
+  const admin = getServiceSupabase();
+
+  const { data: request, error: requestError } = await admin
+    .from('stay_requests')
+    .select(
+      'id, traveler_id, host_id, message, created_at, conversation_id'
+    )
+    .eq('id', requestId)
+    .maybeSingle();
+
+  if (requestError || !request) {
+    throw new Error('not_found');
+  }
+
+  const participant =
+    request.traveler_id === userId || request.host_id === userId;
+
+  if (!participant) {
+    throw new Error('forbidden');
+  }
+
+  let conversationId: string | null = request.conversation_id ?? null;
+
+  if (!conversationId) {
+    const { data: existingConversation } = await admin
+      .from('conversations')
+      .select('id')
+      .eq('traveler_id', request.traveler_id)
+      .eq('host_id', request.host_id)
+      .maybeSingle();
+
+    if (existingConversation?.id) {
+      conversationId = existingConversation.id;
+    } else {
+      const { data: newConversation, error: createError } = await admin
+        .from('conversations')
+        .insert({
+          traveler_id: request.traveler_id,
+          host_id: request.host_id,
+        })
+        .select('id')
+        .single();
+
+      if (createError) {
+        if (createError.code === '23505') {
+          const { data: conflictConversation, error: conflictError } =
+            await admin
+              .from('conversations')
+              .select('id')
+              .eq('traveler_id', request.traveler_id)
+              .eq('host_id', request.host_id)
+              .maybeSingle();
+
+          if (conflictError) {
+            throw conflictError;
+          }
+
+          conversationId = conflictConversation?.id ?? null;
+        } else {
+          throw createError;
+        }
+      } else {
+        conversationId = newConversation?.id ?? null;
+      }
+    }
+
+    if (!conversationId) {
+      throw new Error('conversation_failed');
+    }
+
+    const { error: updateError } = await admin
+      .from('stay_requests')
+      .update({ conversation_id: conversationId })
+      .eq('id', request.id);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    const trimmedMessage = request.message?.trim();
+
+    if (trimmedMessage) {
+      const { count: existingMessages } = await admin
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('conversation_id', conversationId);
+
+      if (!existingMessages || existingMessages === 0) {
+        await admin.from('messages').insert({
+          conversation_id: conversationId,
+          sender_id: request.traveler_id,
+          text: trimmedMessage,
+          created_at: request.created_at ?? new Date().toISOString(),
+        });
+      }
+    }
+  }
+
+  return { conversationId };
 }
