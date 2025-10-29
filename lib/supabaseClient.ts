@@ -3,7 +3,6 @@
 import { createBrowserClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-// один-единственный браузерный клиент Supabase для фронта и реального времени
 let browserClient: SupabaseClient | null = null;
 
 export function getBrowserSupabase(): SupabaseClient {
@@ -15,3 +14,6 @@ export function getBrowserSupabase(): SupabaseClient {
   }
   return browserClient;
 }
+
+// старые страницы ожидают { supabase }
+export const supabase = getBrowserSupabase();
