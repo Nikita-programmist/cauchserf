@@ -1,4 +1,5 @@
 import Head from 'next/head';
+import Link from 'next/link';
 import { useState } from 'react';
 import { Navbar } from '../components/Navbar';
 import { Hero } from '../components/Hero';
@@ -8,6 +9,8 @@ import { Dialog } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { TESTIMONIALS } from '../content/testimonials';
+import ChatPageClient from '../components/ChatPageClient';
+import { useAuth } from '../components/AuthProvider';
 
 const journeys = [
   {
@@ -26,6 +29,7 @@ const journeys = [
 
 export default function Home() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { user, loading: authLoading, hasSupabaseEnv } = useAuth();
 
   return (
     <>
@@ -40,6 +44,44 @@ export default function Home() {
         <Navbar />
         <main className="flex flex-1 flex-col gap-24">
           <Hero />
+
+          <section id="community-chat" className="space-y-6">
+            <header className="max-w-3xl space-y-3">
+              <h2 className="text-3xl font-semibold text-fg sm:text-4xl">Чат сообщества</h2>
+              <p className="text-base text-fg/75">
+                Общайтесь с путешественниками и хозяевами сразу после входа. Обсуждайте поездки, уточняйте детали проживания и
+                делитесь опытом напрямую в Домике.
+              </p>
+            </header>
+            {!hasSupabaseEnv ? (
+              <div className="glass-strong rounded-3xl p-6 text-sm text-fg/80">
+                <p>Чат временно недоступен: настройте переменные окружения Supabase, чтобы активировать общение.</p>
+              </div>
+            ) : authLoading ? (
+              <div className="glass-strong rounded-3xl p-6 text-sm text-fg/80">
+                <p>Загружаем чат сообщества…</p>
+              </div>
+            ) : user ? (
+              <div className="glass-strong rounded-3xl p-3">
+                <ChatPageClient currentUserId={user.id} className="h-[70vh]" />
+              </div>
+            ) : (
+              <div className="glass-strong flex flex-col gap-4 rounded-3xl p-6 text-sm text-fg/80 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-2">
+                  <p className="text-base font-medium text-fg">Войдите, чтобы писать в общий чат Домика.</p>
+                  <p>Создайте аккаунт путешественника или хозяина и начните общение с сообществом.</p>
+                </div>
+                <div className="flex flex-col gap-2 sm:min-w-[220px]">
+                  <Button variant="solid" asChild>
+                    <Link href="/login">Войти</Link>
+                  </Button>
+                  <Button variant="glass" asChild>
+                    <Link href="/signup">Создать аккаунт</Link>
+                  </Button>
+                </div>
+              </div>
+            )}
+          </section>
 
           <section id="guides" className="space-y-10">
             <header className="max-w-3xl space-y-3">
