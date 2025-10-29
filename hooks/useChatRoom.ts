@@ -32,11 +32,13 @@ type UseChatRoomResult = {
   setTyping: (typing: boolean) => void;
   presenceState: PresenceState;
   currentUserId: string | null;
+  isSending: boolean;
 };
 
 export function useChatRoom(roomId: string): UseChatRoomResult {
   const supabase = getSupabaseClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isSending, setIsSending] = useState(false);
   const [presenceState, setPresenceState] = useState<PresenceState>({});
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const profilesRef = useRef<Record<string, ChatMessage['sender']>>({});
@@ -266,34 +268,40 @@ export function useChatRoom(roomId: string): UseChatRoomResult {
       const trimmed = text.trim();
       if (!trimmed) return;
 
-      const response = await fetch('/api/chat/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ roomId, text: trimmed }),
-      });
+      setIsSending(true);
 
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || 'Failed to send message');
-      }
+      try {
+        const response = await fetch('/api/chat/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ roomId, text: trimmed }),
+        });
 
-      const payload = await response.json();
-      const message: ChatMessage | undefined = payload.message;
-
-      if (!message) return;
-
-      profilesRef.current[message.sender_id] = message.sender;
-
-      setMessages((prev) => {
-        if (prev.some((msg) => msg.id === message.id)) {
-          return prev;
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || 'Failed to send message');
         }
-        return [...prev, message].sort((a, b) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        );
-      });
+
+        const payload = await response.json();
+        const message: ChatMessage | undefined = payload.message;
+
+        if (!message) return;
+
+        profilesRef.current[message.sender_id] = message.sender;
+
+        setMessages((prev) => {
+          if (prev.some((msg) => msg.id === message.id)) {
+            return prev;
+          }
+          return [...prev, message].sort((a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+        });
+      } finally {
+        setIsSending(false);
+      }
     },
     [roomId]
   );
@@ -342,5 +350,6 @@ export function useChatRoom(roomId: string): UseChatRoomResult {
     setTyping,
     presenceState,
     currentUserId,
+    isSending,
   };
 }
