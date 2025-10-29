@@ -1,61 +1,65 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import ConversationList from '@/components/chat/ConversationList';
+import { useEffect, useMemo, useState } from 'react';
 import ChatWindow from '@/components/ChatWindow';
+import ConversationList from '@/components/chat/ConversationList';
+import type { ChatRoomListItem } from '@/lib/chatRooms';
 import { cn } from '@/lib/utils';
+
+type ChatPageClientProps = {
+  currentUserId: string;
+  initialItems: ChatRoomListItem[];
+  className?: string;
+};
 
 export default function ChatPageClient({
   currentUserId,
+  initialItems,
   className,
-}: {
-  currentUserId: string;
-  className?: string;
-}) {
-  const [activeId, setActiveId] = useState<string | null>(null);
+}: ChatPageClientProps) {
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(
+    initialItems[0]?.roomId ?? null
+  );
 
-  // Автооткрытие первого диалога, чтобы не было пустого экрана
+  const items = useMemo(() => initialItems, [initialItems]);
+
   useEffect(() => {
-    (async () => {
-      if (activeId) return;
-      const res = await fetch('/api/conversations', {
-        method: 'GET',
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        const firstConversation = data.find(
-          (item: any) => item?.conversationId
-        );
+    if (!activeRoomId && items.length > 0) {
+      setActiveRoomId(items[0]?.roomId ?? null);
+    }
+  }, [activeRoomId, items]);
 
-        if (firstConversation?.conversationId) {
-          setActiveId(firstConversation.conversationId);
-        }
-      }
-    })();
-  }, [activeId]);
+  useEffect(() => {
+    if (!activeRoomId) {
+      return;
+    }
+    const stillExists = items.some((item) => item.roomId === activeRoomId);
+    if (!stillExists) {
+      setActiveRoomId(items[0]?.roomId ?? null);
+    }
+  }, [activeRoomId, items]);
 
   return (
     <div
       className={cn(
-        'flex h-[calc(100vh-2rem)] border rounded-lg overflow-hidden bg-white',
+        'flex h-full min-h-[360px] overflow-hidden rounded-3xl border border-white/10 bg-white/70 shadow-inner backdrop-blur',
         className
       )}
     >
       <ConversationList
-        onSelect={(id) => setActiveId(id)}
-        selectedConversationId={activeId}
+        items={items}
+        onSelect={setActiveRoomId}
+        selectedConversationId={activeRoomId}
       />
-      {activeId ? (
-        <ChatWindow
-          conversationId={activeId}
-          currentUserId={currentUserId}
-        />
-      ) : (
-        <div className="flex-1 flex items-center justify-center text-neutral-400 text-sm">
-          Выбери диалог слева
-        </div>
-      )}
+      <div className="flex flex-1 flex-col">
+        {activeRoomId ? (
+          <ChatWindow roomId={activeRoomId} currentUserId={currentUserId} />
+        ) : (
+          <div className="flex flex-1 items-center justify-center bg-white/60 text-sm text-neutral-500">
+            Выберите чат, чтобы начать переписку
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '../../components/AuthProvider';
 import BackToHomeLink from '../../components/BackToHomeLink';
@@ -27,7 +27,9 @@ export default function ListingDetailsPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [guestMessage, setGuestMessage] = useState('');
-  const [statusMessage, setStatusMessage] = useState({ type: 'idle', text: '', conversationId: null });
+  const [statusMessage, setStatusMessage] = useState({ type: 'idle', text: '' });
+  const [isContactingHost, setIsContactingHost] = useState(false);
+  const [contactError, setContactError] = useState('');
 
   const clearStatusMessage = () => {
     setStatusMessage((current) =>
@@ -35,8 +37,7 @@ export default function ListingDetailsPage() {
         ? current
         : {
             type: 'idle',
-            text: '',
-            conversationId: null
+            text: ''
           }
     );
     resetStatus();
@@ -57,26 +58,70 @@ export default function ListingDetailsPage() {
     setGuestMessage(event.target.value);
   };
 
+  const ensureChatRoom = async (otherUserId) => {
+    const response = await fetch(`/api/chat/room?otherUserId=${otherUserId}`, {
+      method: 'GET',
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      const message = payload?.error || 'Не получилось открыть чат.';
+      throw new Error(message);
+    }
+
+    const payload = await response.json();
+    if (!payload?.roomId) {
+      throw new Error('Не получилось открыть чат.');
+    }
+
+    return payload.roomId;
+  };
+
+  const handleContactHost = async () => {
+    setContactError('');
+
+    if (!user?.id) {
+      router.push(`/login?redirect=/listings/${id}`);
+      return;
+    }
+
+    if (!listing?.host_id) {
+      setContactError('Не удалось определить хозяина объявления.');
+      return;
+    }
+
+    try {
+      setIsContactingHost(true);
+      const roomId = await ensureChatRoom(listing.host_id);
+      router.push(`/chat/${roomId}`);
+    } catch (fetchError) {
+      setContactError(fetchError.message || 'Не получилось открыть чат.');
+    } finally {
+      setIsContactingHost(false);
+    }
+  };
+
   const handleRequestSubmit = async (event) => {
     event.preventDefault();
     clearStatusMessage();
 
     if (!startDate || !endDate) {
-      setStatusMessage({ type: 'error', text: 'Пожалуйста, укажите даты заезда и выезда.', conversationId: null });
+      setStatusMessage({ type: 'error', text: 'Пожалуйста, укажите даты заезда и выезда.' });
       return;
     }
 
     if (new Date(startDate) > new Date(endDate)) {
-      setStatusMessage({ type: 'error', text: 'Дата выезда должна быть позже даты заезда.', conversationId: null });
+      setStatusMessage({ type: 'error', text: 'Дата выезда должна быть позже даты заезда.' });
       return;
     }
 
     if (!guestMessage.trim()) {
-      setStatusMessage({ type: 'error', text: 'Пожалуйста, напишите сообщение хозяину.', conversationId: null });
+      setStatusMessage({ type: 'error', text: 'Пожалуйста, напишите сообщение хозяину.' });
       return;
     }
 
-    const { error: requestError, conversationId } = await sendRequest({
+    const { error: requestError, roomId: createdRoomId } = await sendRequest({
       listingId: listing?.id,
       hostId: listing?.host_id,
       startDate,
@@ -85,19 +130,33 @@ export default function ListingDetailsPage() {
     });
 
     if (requestError) {
-      setStatusMessage({ type: 'error', text: 'Не получилось отправить заявку. Попробуйте позже.', conversationId: null });
-      return;
-    }
-
-    if (!conversationId) {
-      setStatusMessage({ type: 'error', text: 'Не получилось открыть чат. Попробуйте позже.', conversationId: null });
+      setStatusMessage({ type: 'error', text: 'Не получилось отправить заявку. Попробуйте позже.' });
       return;
     }
 
     setStartDate('');
     setEndDate('');
     setGuestMessage('');
-    router.push(`/chat/${conversationId}`);
+
+    if (!listing?.host_id) {
+      setStatusMessage({ type: 'error', text: 'Не получилось открыть чат. Попробуйте позже.' });
+      return;
+    }
+
+    if (createdRoomId) {
+      router.push(`/chat/${createdRoomId}`);
+      return;
+    }
+
+    try {
+      const roomId = await ensureChatRoom(listing.host_id);
+      router.push(`/chat/${roomId}`);
+    } catch (fetchError) {
+      setStatusMessage({
+        type: 'error',
+        text: fetchError.message || 'Не получилось открыть чат. Попробуйте позже.'
+      });
+    }
   };
 
   useEffect(() => {
@@ -158,7 +217,7 @@ export default function ListingDetailsPage() {
     };
   }, [id, supabase, hasSupabaseEnv]);
 
-  const photos = Array.isArray(listing?.photos) ? listing.photos.slice(0, 4) : [];
+  const photos = useMemo(() => (Array.isArray(listing?.photos) ? listing.photos.slice(0, 4) : []), [listing?.photos]);
   const isHostViewing = Boolean(user?.id && listing?.host_id && listing.host_id === user.id);
 
   return (
@@ -202,19 +261,29 @@ export default function ListingDetailsPage() {
               </div>
               <div className="rounded-3xl border border-white/15 bg-white/5 px-6 py-5">
                 <h2 className="text-lg font-semibold text-fg">Хозяин</h2>
-                <div className="mt-4 flex items-center gap-4">
-                  <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/15 bg-white/10">
-                    {hostProfile?.avatar_url ? (
-                      <img src={hostProfile.avatar_url} alt={combineName(hostProfile)} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs text-fg/60">Нет фото</div>
-                    )}
+                <div className="mt-4 flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/15 bg-white/10">
+                      {hostProfile?.avatar_url ? (
+                        <img src={hostProfile.avatar_url} alt={combineName(hostProfile)} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs text-fg/60">Нет фото</div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-base font-medium text-fg">{combineName(hostProfile)}</p>
+                      <p className="text-sm text-fg/70">Опытный хозяин Домика</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-base font-medium text-fg">{combineName(hostProfile)}</p>
-                    <p className="text-sm text-fg/70">Опытный хозяин Домика</p>
-                  </div>
+                  {!isHostViewing ? (
+                    <Button onClick={handleContactHost} disabled={isContactingHost} variant="solid">
+                      {isContactingHost ? 'Открываем…' : 'Написать хозяину'}
+                    </Button>
+                  ) : null}
                 </div>
+                {contactError ? (
+                  <p className="mt-3 text-sm text-red-400">{contactError}</p>
+                ) : null}
               </div>
             </article>
             {isHostViewing ? (

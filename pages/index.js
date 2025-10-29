@@ -9,7 +9,6 @@ import { Dialog } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { TESTIMONIALS } from '../content/testimonials';
-import ChatPageClient from '../components/ChatPageClient';
 import { useAuth } from '../components/AuthProvider';
 
 const journeys = [
@@ -49,8 +48,7 @@ export default function Home() {
             <header className="max-w-3xl space-y-3">
               <h2 className="text-3xl font-semibold text-fg sm:text-4xl">Чат сообщества</h2>
               <p className="text-base text-fg/75">
-                Общайтесь с путешественниками и хозяевами сразу после входа. Обсуждайте поездки, уточняйте детали проживания и
-                делитесь опытом напрямую в Домике.
+                Общайтесь с путешественниками и хозяевами сразу после входа. Обсуждайте поездки, уточняйте детали проживания и делитесь опытом напрямую в Домике.
               </p>
             </header>
             {!hasSupabaseEnv ? (
@@ -59,17 +57,23 @@ export default function Home() {
               </div>
             ) : authLoading ? (
               <div className="glass-strong rounded-3xl p-6 text-sm text-fg/80">
-                <p>Загружаем чат сообщества…</p>
+                <p>Загружаем информацию о ваших диалогах…</p>
               </div>
             ) : user ? (
-              <div className="glass-strong rounded-3xl p-3">
-                <ChatPageClient currentUserId={user.id} className="h-[70vh]" />
+              <div className="glass-strong flex flex-col items-start gap-4 rounded-3xl p-6 text-sm text-fg/80 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-2">
+                  <p className="text-base font-medium text-fg">Ваши личные диалоги готовы.</p>
+                  <p>Открывайте чат, чтобы продолжить обсуждение путешествий и бронирований.</p>
+                </div>
+                <Button asChild variant="solid">
+                  <Link href="/chat">Открыть мои диалоги</Link>
+                </Button>
               </div>
             ) : (
               <div className="glass-strong flex flex-col gap-4 rounded-3xl p-6 text-sm text-fg/80 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-2">
-                  <p className="text-base font-medium text-fg">Войдите, чтобы писать в общий чат Домика.</p>
-                  <p>Создайте аккаунт путешественника или хозяина и начните общение с сообществом.</p>
+                  <p className="text-base font-medium text-fg">Войдите, чтобы писать в личные чаты Домика.</p>
+                  <p>Создайте аккаунт путешественника или хозяина и начните общение.</p>
                 </div>
                 <div className="flex flex-col gap-2 sm:min-w-[220px]">
                   <Button variant="solid" asChild>
@@ -87,8 +91,7 @@ export default function Home() {
             <header className="max-w-3xl space-y-3">
               <h2 className="text-3xl font-semibold text-fg sm:text-4xl">Прозрачные сценарии путешествий</h2>
               <p className="text-base text-fg/75">
-                Мы собрали ключевые сценарии сервиса и адаптировали их к новой стеклянной системе «Домик». Каждый блок легко
-                комбинируется и сохраняет единый визуальный стиль.
+                Мы собрали ключевые сценарии сервиса и адаптировали их к новой стеклянной системе «Домик». Каждый блок легко комбинируется и сохраняет единый визуальный стиль.
               </p>
             </header>
             <div className="grid gap-6 md:grid-cols-3">
@@ -176,8 +179,7 @@ export default function Home() {
         description="Оставьте заявку — мы поможем подобрать формат участия."
       >
         <p className="text-sm text-fg/80">
-          Менеджер сообщества свяжется с вами в течение 24 часов. Мы ценим прозрачность: все действия фиксируются в вашей
-          панели.
+          Менеджер сообщества свяжется с вами в течение 24 часов. Мы ценим прозрачность: все действия фиксируются в вашей панели.
         </p>
       </Dialog>
     </>
