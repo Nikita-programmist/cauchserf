@@ -1,4 +1,4 @@
-import { getServerSupabase, getServiceSupabase } from './supabaseServer';
+import { getCurrentUser, getServerSupabase, getServiceSupabase } from './supabaseServer';
 
 export class ChatServiceError extends Error {
   status: number;
@@ -37,10 +37,18 @@ export async function getOrCreateConversationForBooking(bookingId: string): Prom
     throw new ChatServiceError(400, 'Booking id is required');
   }
 
+  const user = await getCurrentUser();
+
+  if (!user) {
+    throw new ChatServiceError(401, 'Authentication required');
+  }
+
+  const userId = user.id;
+
   const service = getServiceSupabase();
 
   const { data: booking, error: bookingError } = await service
-    .from('bookings')
+    .from('stay_requests')
     .select('id, traveler_id, host_id')
     .eq('id', bookingId)
     .maybeSingle();
@@ -51,6 +59,10 @@ export async function getOrCreateConversationForBooking(bookingId: string): Prom
 
   if (!booking) {
     throw new ChatServiceError(404, 'Booking not found');
+  }
+
+  if (booking.traveler_id !== userId && booking.host_id !== userId) {
+    throw new ChatServiceError(403, 'Not authorized to access this booking');
   }
 
   const { data: existingLink, error: linkError } = await service
