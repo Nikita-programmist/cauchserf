@@ -1,40 +1,17 @@
+// app/chat/[roomId]/page.tsx
 import { redirect } from 'next/navigation';
-import { getChatRoomWithProfiles, getCurrentUserProfile } from '@/lib/chatRooms';
-import ChatRoomView from './ChatRoomView';
+import ChatWindow from '@/components/ChatWindow';
+import { getCurrentUserProfile } from '@/lib/chatRooms';
 
-type PageProps = {
-  params: {
-    roomId: string;
-  };
-};
-
-export default async function ChatRoomPage({ params }: PageProps) {
-  const { roomId } = params;
-  const currentProfile = await getCurrentUserProfile();
-
-  if (!currentProfile) {
-    redirect(`/login?redirect=/chat/${roomId}`);
+export default async function ChatRoomPage({ params }: { params: { roomId: string } }) {
+  const currentUser = await getCurrentUserProfile();
+  if (!currentUser) {
+    redirect(`/login?redirect=/chat/${params.roomId}`);
   }
-
-  const room = await getChatRoomWithProfiles(roomId);
-
-  if (!room) {
-    redirect('/chat');
-  }
-
-  const participantIds = [room.traveler_id, room.host_id];
-  if (!participantIds.includes(currentProfile.id)) {
-    redirect('/chat');
-  }
-
-  const otherProfile =
-    room.traveler_id === currentProfile.id ? room.host : room.traveler;
 
   return (
-    <ChatRoomView
-      roomId={room.id}
-      currentUser={currentProfile}
-      otherUser={otherProfile}
-    />
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
+      <ChatWindow roomId={params.roomId} currentUserId={currentUser.id} />
+    </div>
   );
 }
