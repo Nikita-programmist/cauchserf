@@ -131,52 +131,139 @@ export async function listConversationsForUser(userId: string) {
   const supabase = getServerSupabase();
   const admin = getServiceSupabase();
 
-  // RLS уже не отдаст чужие разговоры, так что можно без фильтра .or()
-  const { data: convs, error } = await supabase
+  const { data: convs, error: convError } = await supabase
     .from('conversations')
     .select(
       'id, traveler_id, host_id, last_message_text, last_message_at'
     )
     .order('last_message_at', { ascending: false });
 
-  if (error) throw error;
+  if (convError) throw convError;
+
+  const conversationIds = new Set<string>();
+  const otherUserIds = new Set<string>();
+
+  for (const conv of convs ?? []) {
+    conversationIds.add(conv.id);
+    const otherUserId =
+      conv.traveler_id === userId ? conv.host_id : conv.traveler_id;
+    if (otherUserId) {
+      otherUserIds.add(otherUserId);
+    }
+  }
+
+  const { data: requests, error: requestsError } = await admin
+    .from('stay_requests')
+    .select(
+      'id, traveler_id, host_id, message, created_at, conversation_id'
+    )
+    .or(`traveler_id.eq.${userId},host_id.eq.${userId}`)
+    .order('created_at', { ascending: false });
+
+  if (requestsError) throw requestsError;
+
+  for (const request of requests ?? []) {
+    const otherUserId =
+      request.traveler_id === userId
+        ? request.host_id
+        : request.traveler_id;
+    if (otherUserId) {
+      otherUserIds.add(otherUserId);
+    }
+  }
+
+  const profileMap = new Map<string, ProfileRow>();
+  if (otherUserIds.size > 0) {
+    const { data: profiles, error: profilesError } = await admin
+      .from('profiles')
+      .select('id, full_name, first_name, last_name, name, avatar_url')
+      .in('id', Array.from(otherUserIds));
+
+    if (profilesError) throw profilesError;
+
+    for (const profile of profiles ?? []) {
+      if (profile?.id) {
+        profileMap.set(profile.id, profile as ProfileRow);
+      }
+    }
+  }
+
+  const unreadCounts: Record<string, number> = {};
+  if ((convs ?? []).length > 0) {
+    const { data: unreadRows, error: unreadError } = await admin
+      .from('messages')
+      .select('conversation_id')
+      .in(
+        'conversation_id',
+        (convs ?? []).map((conv: any) => conv.id)
+      )
+      .neq('sender_id', userId)
+      .is('read_at', null);
+
+    if (unreadError) throw unreadError;
+
+    for (const row of unreadRows ?? []) {
+      const convId = row.conversation_id as string;
+      unreadCounts[convId] = (unreadCounts[convId] ?? 0) + 1;
+    }
+  }
 
   const result: any[] = [];
 
   for (const conv of convs ?? []) {
     const otherUserId =
       conv.traveler_id === userId ? conv.host_id : conv.traveler_id;
-
-    // инфа о собеседнике
-    const { data: profile } = await admin
-      .from('profiles')
-      .select('id, full_name, first_name, last_name, name, avatar_url')
-      .eq('id', otherUserId)
-      .maybeSingle();
-
-    // сколько у меня непрочитанных
-    const { count: unreadCount } = await admin
-      .from('messages')
-      .select('id', { count: 'exact', head: true })
-      .eq('conversation_id', conv.id)
-      .neq('sender_id', userId)
-      .is('read_at', null);
+    const profile = otherUserId ? profileMap.get(otherUserId) ?? null : null;
 
     result.push({
-      id: conv.id,
+      id: `conversation-${conv.id}`,
       conversationId: conv.id,
       type: 'conversation',
       requestId: null,
       lastMessageText: conv.last_message_text ?? '',
       lastMessageAt: conv.last_message_at ?? null,
       otherUser: {
-        id: profile?.id ?? otherUserId,
-        name: resolveProfileName(profile as ProfileRow | null, 'User'),
-        avatarUrl: resolveAvatarUrl(profile as ProfileRow | null),
+        id: otherUserId,
+        name: resolveProfileName(profile, 'User'),
+        avatarUrl: resolveAvatarUrl(profile),
       },
-      unreadCount: unreadCount ?? 0,
+      unreadCount: unreadCounts[conv.id] ?? 0,
     });
   }
+
+  for (const request of requests ?? []) {
+    if (request.conversation_id && conversationIds.has(request.conversation_id)) {
+      continue;
+    }
+
+    const isTraveler = request.traveler_id === userId;
+    const otherUserId = isTraveler ? request.host_id : request.traveler_id;
+    const profile = otherUserId ? profileMap.get(otherUserId) ?? null : null;
+
+    result.push({
+      id: `request-${request.id}`,
+      conversationId: request.conversation_id,
+      type: 'stay_request',
+      requestId: request.id,
+      lastMessageText: request.message ?? '',
+      lastMessageAt: request.created_at ?? null,
+      otherUser: {
+        id: otherUserId,
+        name: resolveProfileName(
+          profile,
+          isTraveler ? 'Хост' : 'Путешественник'
+        ),
+        avatarUrl: resolveAvatarUrl(profile),
+      },
+      unreadCount: 0,
+    });
+  }
+
+  result.sort((a, b) => {
+    const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+    const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+    return bTime - aTime;
+  });
 
   return result;
 }
