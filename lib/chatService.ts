@@ -1,5 +1,49 @@
 import { getServerSupabase, getServiceSupabase } from '@/lib/supabaseServer';
 
+type ProfileRow = {
+  id: string;
+  avatar_url: string | null;
+  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  name?: string | null;
+};
+
+function resolveProfileName(profile: ProfileRow | null, fallback: string) {
+  if (!profile) return fallback;
+
+  const {
+    full_name,
+    first_name,
+    last_name,
+    name,
+  } = profile;
+
+  if (full_name && full_name.trim().length > 0) {
+    return full_name.trim();
+  }
+
+  const combined = [first_name, last_name]
+    .filter((part) => part && part.trim().length > 0)
+    .join(' ')
+    .trim();
+
+  if (combined.length > 0) {
+    return combined;
+  }
+
+  if (name && name.trim().length > 0) {
+    return name.trim();
+  }
+
+  return fallback;
+}
+
+function resolveAvatarUrl(profile: ProfileRow | null) {
+  if (!profile) return null;
+  return profile.avatar_url ?? null;
+}
+
 // ВАЖНО: ниже используются таблицы, которые ты уже создал в Supabase SQL:
 // conversations, messages, conversation_bookings, bookings, profiles
 
@@ -106,7 +150,7 @@ export async function listConversationsForUser(userId: string) {
     // инфа о собеседнике
     const { data: profile } = await admin
       .from('profiles')
-      .select('id, name, avatar_url')
+      .select('id, full_name, first_name, last_name, name, avatar_url')
       .eq('id', otherUserId)
       .maybeSingle();
 
@@ -124,8 +168,8 @@ export async function listConversationsForUser(userId: string) {
       lastMessageAt: conv.last_message_at ?? null,
       otherUser: {
         id: profile?.id ?? otherUserId,
-        name: profile?.name ?? 'User',
-        avatarUrl: profile?.avatar_url ?? null,
+        name: resolveProfileName(profile as ProfileRow | null, 'User'),
+        avatarUrl: resolveAvatarUrl(profile as ProfileRow | null),
       },
       unreadCount: unreadCount ?? 0,
     });
@@ -162,13 +206,13 @@ export async function getConversationWithMessages(
 
   const { data: meProfile } = await admin
     .from('profiles')
-    .select('id, name, avatar_url')
+    .select('id, full_name, first_name, last_name, name, avatar_url')
     .eq('id', userId)
     .maybeSingle();
 
   const { data: otherProfile } = await admin
     .from('profiles')
-    .select('id, name, avatar_url')
+    .select('id, full_name, first_name, last_name, name, avatar_url')
     .eq('id', otherUserId)
     .maybeSingle();
 
@@ -176,13 +220,13 @@ export async function getConversationWithMessages(
     conversationId,
     me: {
       id: userId,
-      name: meProfile?.name ?? 'Me',
-      avatarUrl: meProfile?.avatar_url ?? null,
+      name: resolveProfileName(meProfile as ProfileRow | null, 'Me'),
+      avatarUrl: resolveAvatarUrl(meProfile as ProfileRow | null),
     },
     otherUser: {
       id: otherUserId,
-      name: otherProfile?.name ?? 'User',
-      avatarUrl: otherProfile?.avatar_url ?? null,
+      name: resolveProfileName(otherProfile as ProfileRow | null, 'User'),
+      avatarUrl: resolveAvatarUrl(otherProfile as ProfileRow | null),
     },
     messages: (msgs ?? []).map((m: any) => ({
       id: m.id,

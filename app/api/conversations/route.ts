@@ -1,117 +1,114 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getCurrentUser, getServiceSupabase } from '@/lib/supabaseServer';
+import { listConversationsForUser } from '@/lib/chatService';
 
-// сервисный клиент Supabase, без куки, с правами читать всё
-function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, serviceKey, {
-    auth: { persistSession: false },
-  });
+function resolveProfileName(profile: any, fallback: string) {
+  if (!profile) return fallback;
+
+  const { full_name, first_name, last_name, name } = profile;
+
+  if (full_name && full_name.trim().length > 0) {
+    return full_name.trim();
+  }
+
+  const combined = [first_name, last_name]
+    .filter((part: string | null | undefined) => part && part.trim().length > 0)
+    .join(' ')
+    .trim();
+
+  if (combined.length > 0) {
+    return combined;
+  }
+
+  if (name && name.trim().length > 0) {
+    return name.trim();
+  }
+
+  return fallback;
 }
 
-// утилита: достать профиль юзера (имя, аватар)
-async function fetchProfile(supabase: any, userId: string) {
-  if (!userId) return null;
-  const { data } = await supabase
-    .from('profiles')
-    .select('id, full_name, avatar_url')
-    .eq('id', userId)
-    .single();
-  return data || null;
+function resolveAvatarUrl(profile: any) {
+  return profile?.avatar_url ?? null;
 }
 
-// GET /api/conversations
-// возвращаем массив "диалогов", чтобы ConversationList отрисовал список
 export async function GET() {
-  const supabase = getServiceSupabase();
+  const user = await getCurrentUser();
 
-  // 1. реальные беседы (conversations)
-  const { data: convos } = await supabase
-    .from('conversations')
-    .select('id, traveler_id, host_id');
-
-  let conversationItems: any[] = [];
-
-  if (convos && convos.length > 0) {
-    for (const convo of convos) {
-      const { data: lastMsgRows } = await supabase
-        .from('messages')
-        .select('text, created_at, sender_id')
-        .eq('conversation_id', convo.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      const lastMsg = lastMsgRows && lastMsgRows[0];
-
-      const travelerProfile = await fetchProfile(
-        supabase,
-        convo.traveler_id
-      );
-      const hostProfile = await fetchProfile(
-        supabase,
-        convo.host_id
-      );
-
-      // показываем другого участника (пока считаем, что это host)
-      const otherUser = {
-        id: hostProfile?.id ?? convo.host_id,
-        name: hostProfile?.full_name ?? 'Хост',
-        avatarUrl: hostProfile?.avatar_url ?? null,
-      };
-
-      conversationItems.push({
-        id: convo.id, // это conversationId
-        otherUser,
-        lastMessageText: lastMsg ? lastMsg.text : 'Без сообщений',
-        lastMessageAt: lastMsg ? lastMsg.created_at : null,
-      });
-    }
+  if (!user) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  // 2. заявки (stay_requests) = чаты до создания conversations
-  const { data: requests } = await supabase
-    .from('stay_requests')
-    .select('id, traveler_id, host_id, message, created_at')
-    .order('created_at', { ascending: false });
+  const [conversations, stayRequests] = await Promise.all([
+    listConversationsForUser(user.id),
+    fetchPendingRequests(user.id),
+  ]);
 
-  if (requests && requests.length > 0) {
-    for (const req of requests) {
-      const travelerProfile = await fetchProfile(
-        supabase,
-        req.traveler_id
-      );
-      const hostProfile = await fetchProfile(
-        supabase,
-        req.host_id
-      );
-
-      const otherUser = {
-        id: travelerProfile?.id ?? req.traveler_id,
-        name: travelerProfile?.full_name ?? 'Путешественник',
-        avatarUrl: travelerProfile?.avatar_url ?? null,
-      };
-
-      const text =
-        req.message && req.message.trim().length > 0
-          ? req.message
-          : 'Гость не оставил сообщение.';
-
-      conversationItems.push({
-        id: req.id, // тут id из заявки, не из conversations
-        otherUser,
-        lastMessageText: text,
-        lastMessageAt: req.created_at,
-      });
-    }
-  }
-
-  // 3. сортируем по последнему сообщению (новые выше)
-  conversationItems.sort((a, b) => {
+  const combined = [...conversations, ...stayRequests].sort((a, b) => {
     const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
     const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
     return tb - ta;
   });
 
-  return NextResponse.json(conversationItems);
+  return NextResponse.json(combined);
+}
+
+async function fetchPendingRequests(userId: string) {
+  const supabase = getServiceSupabase();
+
+  const { data, error } = await supabase
+    .from('stay_requests')
+    .select('id, traveler_id, host_id, message, created_at, conversation_id')
+    .or(`traveler_id.eq.${userId},host_id.eq.${userId}`)
+    .is('conversation_id', null)
+    .order('created_at', { ascending: false });
+
+  if (error || !data) {
+    return [] as any[];
+  }
+
+  const profileCache = new Map<string, any>();
+
+  async function getProfile(userIdToFetch: string) {
+    if (profileCache.has(userIdToFetch)) {
+      return profileCache.get(userIdToFetch);
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, full_name, first_name, last_name, name, avatar_url')
+      .eq('id', userIdToFetch)
+      .maybeSingle();
+
+    profileCache.set(userIdToFetch, profile ?? null);
+    return profile;
+  }
+
+  const items: any[] = [];
+
+  for (const req of data) {
+    const isTraveler = req.traveler_id === userId;
+    const otherId = isTraveler ? req.host_id : req.traveler_id;
+    const otherProfile = otherId ? await getProfile(otherId) : null;
+
+    const previewText = req.message && req.message.trim().length > 0
+      ? req.message
+      : 'Гость не оставил сообщение.';
+
+    items.push({
+      id: req.id,
+      otherUser: {
+        id: otherId,
+        name: resolveProfileName(
+          otherProfile,
+          isTraveler ? 'Хост' : 'Путешественник'
+        ),
+        avatarUrl: resolveAvatarUrl(otherProfile),
+      },
+      lastMessageText: previewText,
+      lastMessageAt: req.created_at,
+      unreadCount: 0,
+    });
+  }
+
+  return items;
 }

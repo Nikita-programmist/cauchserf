@@ -1,191 +1,152 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getCurrentUser, getServiceSupabase } from '@/lib/supabaseServer';
+import { getConversationWithMessages } from '@/lib/chatService';
 
-// 1. сервисный supabase-клиент (обходит RLS, не требует куки)
-function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, serviceKey, {
-    auth: { persistSession: false },
-  });
+function resolveProfileName(profile: any, fallback: string) {
+  if (!profile) return fallback;
+
+  const { full_name, first_name, last_name, name } = profile;
+
+  if (full_name && full_name.trim().length > 0) {
+    return full_name.trim();
+  }
+
+  const combined = [first_name, last_name]
+    .filter((part: string | null | undefined) => part && part.trim().length > 0)
+    .join(' ')
+    .trim();
+
+  if (combined.length > 0) {
+    return combined;
+  }
+
+  if (name && name.trim().length > 0) {
+    return name.trim();
+  }
+
+  return fallback;
 }
 
-// 2. собираем payload в том формате, который ждёт фронт (ChatWindow)
-function buildChatPayload({
-  conversationId,
-  me,
-  otherUser,
-  messages,
-}: {
-  conversationId: string;
-  me: { id: string; name: string; avatarUrl: string | null };
-  otherUser: { id: string; name: string; avatarUrl: string | null };
-  messages: {
-    id: string;
-    senderId: string;
-    text: string;
-    createdAt: string;
-    readAt: string | null;
-  }[];
-}) {
-  return {
-    conversationId,
-    me,
-    otherUser,
-    messages,
-  };
+function resolveAvatarUrl(profile: any) {
+  return profile?.avatar_url ?? null;
 }
 
-// вспомогалка: достаём профиль по user_id
-async function fetchProfile(supabase: any, userId: string) {
-  if (!userId) return null;
-  const { data } = await supabase
-    .from('profiles')
-    .select('id, full_name, avatar_url')
-    .eq('id', userId)
-    .single();
-  return data || null;
-}
-
-// основная ручка GET /api/conversations/:conversationId
 export async function GET(
   _req: Request,
   ctx: { params: { conversationId: string } }
 ) {
-  const conversationId = ctx.params.conversationId;
-  const supabase = getServiceSupabase();
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
 
-  //
-  // A. Пытаемся прочитать НОРМАЛЬНЫЙ чат из таблицы conversations + messages
-  //
-  const { data: conversation, error: convoErr } = await supabase
-    .from('conversations')
-    .select('id, traveler_id, host_id')
-    .eq('id', conversationId)
-    .single();
+  try {
+    const conversation = await getConversationWithMessages(
+      ctx.params.conversationId,
+      user.id
+    );
 
-  if (conversation && !convoErr) {
-    const { data: travelerProfile } = await supabase
-      .from('profiles')
-      .select('id, full_name, avatar_url')
-      .eq('id', conversation.traveler_id)
-      .single();
-
-    const { data: hostProfile } = await supabase
-      .from('profiles')
-      .select('id, full_name, avatar_url')
-      .eq('id', conversation.host_id)
-      .single();
-
-    const { data: messages, error: msgErr } = await supabase
-      .from('messages')
-      .select('id, sender_id, text, created_at, read_at')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
-      .limit(100);
-
-    if (msgErr) {
-      return NextResponse.json(
-        { error: 'messages_fetch_failed' },
-        { status: 500 }
-      );
+    return NextResponse.json(conversation);
+  } catch (err: any) {
+    if (err?.message === 'forbidden') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
 
-    const meUser = {
-      id: travelerProfile?.id ?? conversation.traveler_id,
-      name: travelerProfile?.full_name ?? 'Путешественник',
-      avatarUrl: travelerProfile?.avatar_url ?? null,
-    };
+    try {
+      const fallback = await buildStayRequestConversation(
+        ctx.params.conversationId,
+        user.id
+      );
 
-    const otherUser = {
-      id: hostProfile?.id ?? conversation.host_id,
-      name: hostProfile?.full_name ?? 'Хост',
-      avatarUrl: hostProfile?.avatar_url ?? null,
-    };
+      if (fallback) {
+        return NextResponse.json(fallback);
+      }
 
-    const normalizedMessages = (messages ?? []).map((m: any) => ({
-      id: m.id,
-      senderId: m.sender_id,
-      text: m.text,
-      createdAt: m.created_at,
-      readAt: m.read_at,
-    }));
+      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    } catch (fallbackError: any) {
+      if (fallbackError?.message === 'forbidden') {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+      }
 
-    return NextResponse.json(
-      buildChatPayload({
-        conversationId: conversation.id,
-        me: meUser,
-        otherUser,
-        messages: normalizedMessages,
-      })
-    );
+      return NextResponse.json({ error: 'server_error' }, { status: 500 });
+    }
   }
-
-  //
-  // B. Если в таблице conversations нет — пробуем трактовать этот ID
-  // как "заявку на проживание" (stay_requests).
-  // Мы делаем вид, что это чат с первым сообщением.
-  //
-  const { data: requestRow, error: reqErr } = await supabase
-    .from('stay_requests')
-    .select('id, traveler_id, host_id, message, created_at')
-    .eq('id', conversationId)
-    .single();
-
-  if (requestRow && !reqErr) {
-    // профили отправителя и получателя
-    const travelerProfile = await fetchProfile(
-      supabase,
-      requestRow.traveler_id
-    );
-    const hostProfile = await fetchProfile(supabase, requestRow.host_id);
-
-    // делаем вид, что это наш первый "месседж"
-    const firstText =
-      requestRow.message && requestRow.message.trim().length > 0
-        ? requestRow.message
-        : 'Гость не оставил сообщение.';
-
-    const fakeMessage = {
-      id: `initial-${requestRow.id}`,
-      senderId: requestRow.traveler_id,
-      text: firstText,
-      createdAt: requestRow.created_at,
-      readAt: null,
-    };
-
-    const meUser = {
-      id: travelerProfile?.id ?? requestRow.traveler_id,
-      name: travelerProfile?.full_name ?? 'Путешественник',
-      avatarUrl: travelerProfile?.avatar_url ?? null,
-    };
-
-    const otherUser = {
-      id: hostProfile?.id ?? requestRow.host_id,
-      name: hostProfile?.full_name ?? 'Хост',
-      avatarUrl: hostProfile?.avatar_url ?? null,
-    };
-
-    return NextResponse.json(
-      buildChatPayload({
-        conversationId: requestRow.id,
-        me: meUser,
-        otherUser,
-        messages: [fakeMessage],
-      })
-    );
-  }
-
-  //
-  // C. Ни такого разговора, ни такой заявки — реально нет
-  //
-  return NextResponse.json(
-    { error: 'conversation_not_found' },
-    { status: 404 }
-  );
 }
 
-// POST пока блочим (нет авторизованного sender_id)
 export async function POST() {
-  return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  return NextResponse.json({ error: 'method_not_allowed' }, { status: 405 });
+}
+
+async function buildStayRequestConversation(
+  requestId: string,
+  userId: string
+) {
+  const supabase = getServiceSupabase();
+
+  const { data: request, error } = await supabase
+    .from('stay_requests')
+    .select('id, traveler_id, host_id, message, created_at')
+    .eq('id', requestId)
+    .maybeSingle();
+
+  if (error || !request) {
+    return null;
+  }
+
+  const participant =
+    request.traveler_id === userId || request.host_id === userId;
+
+  if (!participant) {
+    throw new Error('forbidden');
+  }
+
+  const { data: travelerProfile } = await supabase
+    .from('profiles')
+    .select('id, full_name, first_name, last_name, name, avatar_url')
+    .eq('id', request.traveler_id)
+    .maybeSingle();
+
+  const { data: hostProfile } = await supabase
+    .from('profiles')
+    .select('id, full_name, first_name, last_name, name, avatar_url')
+    .eq('id', request.host_id)
+    .maybeSingle();
+
+  const messageText = request.message && request.message.trim().length > 0
+    ? request.message
+    : 'Гость не оставил сообщение.';
+
+  const isTraveler = request.traveler_id === userId;
+
+  const meProfile = isTraveler ? travelerProfile : hostProfile;
+  const otherProfile = isTraveler ? hostProfile : travelerProfile;
+
+  const meId = isTraveler ? request.traveler_id : request.host_id;
+  const otherId = isTraveler ? request.host_id : request.traveler_id;
+
+  return {
+    conversationId: request.id,
+    me: {
+      id: meId,
+      name: resolveProfileName(meProfile, isTraveler ? 'Путешественник' : 'Хост'),
+      avatarUrl: resolveAvatarUrl(meProfile),
+    },
+    otherUser: {
+      id: otherId,
+      name: resolveProfileName(
+        otherProfile,
+        isTraveler ? 'Хост' : 'Путешественник'
+      ),
+      avatarUrl: resolveAvatarUrl(otherProfile),
+    },
+    messages: [
+      {
+        id: `initial-${request.id}`,
+        senderId: request.traveler_id,
+        text: messageText,
+        createdAt: request.created_at,
+        readAt: null,
+      },
+    ],
+  };
 }
