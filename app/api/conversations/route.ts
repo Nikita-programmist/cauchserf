@@ -96,6 +96,9 @@ async function fetchPendingRequests(userId: string) {
 
     items.push({
       id: req.id,
+      type: 'stay_request',
+      requestId: req.id,
+      conversationId: req.conversation_id,
       otherUser: {
         id: otherId,
         name: resolveProfileName(

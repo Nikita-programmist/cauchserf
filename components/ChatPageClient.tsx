@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import ConversationList from '@/components/ConversationList';
+import ConversationList from '@/components/chat/ConversationList';
 import ChatWindow from '@/components/ChatWindow';
 
 export default function ChatPageClient({
@@ -9,7 +9,7 @@ export default function ChatPageClient({
 }: {
   currentUserId: string;
 }) {
-  const [activeId, setActiveId] = useState<string>('');
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   // Автооткрытие первого диалога, чтобы не было пустого экрана
   useEffect(() => {
@@ -20,15 +20,24 @@ export default function ChatPageClient({
         credentials: 'include',
       });
       const data = await res.json();
-      if (Array.isArray(data) && data[0]?.id) {
-        setActiveId(data[0].id);
+      if (Array.isArray(data)) {
+        const firstConversation = data.find(
+          (item: any) => item?.conversationId
+        );
+
+        if (firstConversation?.conversationId) {
+          setActiveId(firstConversation.conversationId);
+        }
       }
     })();
   }, [activeId]);
 
   return (
     <div className="flex h-[calc(100vh-2rem)] border rounded-lg overflow-hidden bg-white">
-      <ConversationList onSelect={(id) => setActiveId(id)} />
+      <ConversationList
+        onSelect={(id) => setActiveId(id)}
+        selectedConversationId={activeId}
+      />
       {activeId ? (
         <ChatWindow
           conversationId={activeId}
