@@ -1,29 +1,29 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/supabaseServer';
-import { ChatServiceError, sendMessage } from '@/lib/chatService';
+import { sendMessage } from '@/lib/chatService';
 
 export async function POST(
-  req: Request,
+  req: NextRequest,
   { params }: { params: { conversationId: string } }
 ) {
   const user = await getCurrentUser();
-
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const body = await req.json().catch(() => null);
-  const text = typeof body?.text === 'string' ? body.text : '';
+  const body = await req.json();
+  const text = body?.text ?? '';
 
   try {
-    const message = await sendMessage(params.conversationId, user.id, text);
-    return NextResponse.json(message);
-  } catch (error) {
-    if (error instanceof ChatServiceError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+    const msg = await sendMessage(params.conversationId, user.id, text);
+    return NextResponse.json(msg);
+  } catch (err: any) {
+    if (err.message === 'forbidden') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
-
-    console.error('Failed to send message', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    if (err.message === 'empty') {
+      return NextResponse.json({ error: 'empty' }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }
 }
