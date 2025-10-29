@@ -1,203 +1,96 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import type { ChatRoomListItem } from '@/lib/chatRooms';
+import { useMemo } from 'react';
 
 type ConversationListProps = {
-  onSelect: (conversationId: string) => void;
+  items: ChatRoomListItem[];
+  onSelect: (roomId: string) => void;
   selectedConversationId: string | null;
 };
 
-type ConversationListItem = {
-  id: string;
-  type: 'conversation' | 'stay_request';
-  conversationId: string | null;
-  requestId: string | null;
-  otherUser: {
-    id: string;
-    name: string;
-    avatarUrl: string | null;
-  };
-  lastMessageText: string;
-  lastMessageAt: string | null;
-  unreadCount?: number;
-};
+function getInitials(name: string | null) {
+  if (!name) return '❖';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 0) return '❖';
+  if (parts.length === 1) {
+    return parts[0]?.[0]?.toUpperCase() ?? '❖';
+  }
+  const first = parts[0]?.[0] ?? '';
+  const last = parts[parts.length - 1]?.[0] ?? '';
+  return `${first}${last}`.toUpperCase();
+}
 
 export default function ConversationList({
+  items,
   onSelect,
   selectedConversationId,
 }: ConversationListProps) {
-  const [items, setItems] = useState<ConversationListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [creatingChatForId, setCreatingChatForId] = useState<string | null>(
-    null
+  const formatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    []
   );
-
-  const loadItems = useCallback(async (silent = false) => {
-    if (!silent) {
-      setLoading(true);
-    }
-    setError(null);
-
-    try {
-      const res = await fetch('/api/conversations', {
-        method: 'GET',
-        credentials: 'include',
-      });
-
-      if (!res.ok) {
-        throw new Error('failed');
-      }
-
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setItems(data);
-      } else {
-        setItems([]);
-      }
-    } catch (_error) {
-      setItems([]);
-      setError('Не удалось загрузить список диалогов.');
-    } finally {
-      if (!silent) {
-        setLoading(false);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    loadItems();
-  }, [loadItems]);
-
-  const handleSelect = useCallback(
-    async (item: ConversationListItem) => {
-      if (creatingChatForId) {
-        return;
-      }
-
-      if (item.conversationId) {
-        onSelect(item.conversationId);
-        return;
-      }
-
-      if (item.type === 'stay_request' && item.requestId) {
-        setCreatingChatForId(item.id);
-        setError(null);
-
-        try {
-          const res = await fetch(
-            `/api/stay-requests/${item.requestId}/ensure-conversation`,
-            {
-              method: 'POST',
-              credentials: 'include',
-            }
-          );
-
-          if (!res.ok) {
-            throw new Error('failed');
-          }
-
-          const data = await res.json();
-
-          if (data?.conversationId) {
-            await loadItems(true);
-            onSelect(data.conversationId);
-          }
-        } catch (_error) {
-          setError('Не получилось создать чат. Попробуйте ещё раз.');
-        } finally {
-          setCreatingChatForId(null);
-        }
-      }
-    },
-    [creatingChatForId, loadItems, onSelect]
-  );
-
-  if (loading) {
-    return (
-      <div className="text-sm text-neutral-500 p-4">
-        Загрузка диалогов...
-      </div>
-    );
-  }
 
   if (items.length === 0) {
     return (
-      <div className="text-sm p-4">
-        {error ? (
-          <span className="text-red-500">{error}</span>
-        ) : (
-          <span className="text-neutral-500">Пока нет диалогов.</span>
-        )}
+      <div className="flex flex-1 items-center justify-center px-6 text-sm text-neutral-500">
+        Пока нет диалогов.
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col divide-y divide-neutral-200 bg-white rounded-lg border border-neutral-200 overflow-hidden">
-      {error ? (
-        <div className="px-4 py-2 text-xs text-red-500 bg-red-50">
-          {error}
-        </div>
-      ) : null}
+    <div className="flex w-80 flex-col overflow-y-auto border-r border-white/10 bg-white/30">
       {items.map((item) => {
-        const active = item.conversationId
-          ? item.conversationId === selectedConversationId
-          : creatingChatForId === item.id;
+        const isActive = selectedConversationId === item.roomId;
+        const lastMessageTime = item.lastMessageAt
+          ? formatter.format(new Date(item.lastMessageAt))
+          : null;
+
         return (
           <button
-            key={item.id}
-            onClick={() => handleSelect(item)}
-            disabled={creatingChatForId === item.id}
-            className={
-              'flex items-start gap-3 p-4 text-left w-full transition ' +
-              (active ? 'bg-blue-50' : 'bg-white hover:bg-neutral-50')
-            }
+            key={item.roomId}
+            onClick={() => onSelect(item.roomId)}
+            className={`flex w-full gap-4 px-5 py-4 text-left transition ${
+              isActive
+                ? 'bg-blue-50/90 text-neutral-900 shadow-inner'
+                : 'bg-white/40 text-neutral-800 hover:bg-white/70'
+            }`}
           >
-            {/* Аватар / инициалы */}
-            <div className="w-10 h-10 rounded-full bg-neutral-300 overflow-hidden flex items-center justify-center text-sm font-medium text-white">
-              {item.otherUser.avatarUrl ? (
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-neutral-200 text-sm font-semibold text-neutral-600">
+              {item.otherUser.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={item.otherUser.avatarUrl}
-                  alt={item.otherUser.name}
-                  className="w-full h-full object-cover"
+                  src={item.otherUser.avatar_url}
+                  alt={item.otherUser.display_name ?? 'Аватар'}
+                  className="h-full w-full object-cover"
                 />
               ) : (
-                <span>
-                  {item.otherUser.name
-                    ? item.otherUser.name[0]?.toUpperCase()
-                    : '?'}
-                </span>
+                <span>{getInitials(item.otherUser.display_name)}</span>
               )}
             </div>
-
-            {/* Текст */}
-            <div className="flex-1 min-w-0">
-              <div className="text-[15px] font-semibold text-neutral-900 truncate">
-                {item.otherUser.name || 'Без имени'}
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-blue-600">
-                {item.type === 'stay_request' && !item.conversationId ? (
-                  <span>Заявка без чата</span>
-                ) : null}
-                {creatingChatForId === item.id ? (
-                  <span>Создаём чат…</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate text-sm font-semibold text-neutral-900">
+                  {item.otherUser.display_name ?? 'Без имени'}
+                </p>
+                {lastMessageTime ? (
+                  <span className="flex-shrink-0 text-[11px] text-neutral-500">
+                    {lastMessageTime}
+                  </span>
                 ) : null}
               </div>
-              <div className="text-[13px] text-neutral-600 line-clamp-2 break-words">
-                {item.lastMessageText || 'Без сообщения'}
-              </div>
-              {item.lastMessageAt ? (
-                <div className="text-[11px] text-neutral-400 mt-1">
-                  {new Date(item.lastMessageAt).toLocaleString()}
-                </div>
-              ) : null}
-              {item.unreadCount && item.unreadCount > 0 ? (
-                <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] text-blue-600">
-                  <span>Непрочитанные:</span>
-                  <span>{item.unreadCount}</span>
-                </div>
+              <p className="mt-1 line-clamp-2 text-xs text-neutral-600">
+                {item.lastMessageText || 'Нет сообщений'}
+              </p>
+              {item.unreadCount > 0 ? (
+                <span className="mt-2 inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-600">
+                  {item.unreadCount} непрочитанных
+                </span>
               ) : null}
             </div>
           </button>
