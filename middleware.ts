@@ -1,48 +1,56 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-// Эта прослойка держит сессию Supabase живой между запросами,
-// чтобы API-роуты и Realtime знали кто пользователь.
-export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request });
+// Эта прослойка делает так, чтобы supabase-сессия
+// (куки с токеном) была доступна и страницам, и API-роутам.
+export async function middleware(req: NextRequest) {
+  // Ответ по умолчанию — продолжаем запрос
+  const res = NextResponse.next({
+    request: {
+      headers: req.headers,
+    },
+  });
 
+  // Создаём Supabase клиент, который умеет автообновлять токен,
+  // и записывает свежие куки обратно в ответ.
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll();
+        get(name: string) {
+          return req.cookies.get(name)?.value;
         },
-        setAll(cookiesToSet) {
-          // Обновляем куки в входящем запросе
-          cookiesToSet.forEach(({ name, value, options }) => {
-            request.cookies.set(name, value);
+        set(name: string, value: string, options: any) {
+          res.cookies.set({
+            name,
+            value,
+            ...options,
           });
-
-          // Пересоздаём ответ с новым состоянием куков
-          response = NextResponse.next({ request });
-
-          // Прокидываем куки наружу (в браузер)
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
+        },
+        remove(name: string, options: any) {
+          res.cookies.set({
+            name,
+            value: '',
+            ...options,
           });
         },
       },
     }
   );
 
-  // Принудительно освежаем сессию пользователя,
-  // иначе Supabase может думать что юзер не залогинен.
+  // Триггерим auth.getUser(), чтобы supabase при необходимости
+  // обновил токен и записал новую куку в res.
   await supabase.auth.getUser();
 
-  return response;
+  return res;
 }
 
-// Где запускать этот middleware
+// На какие пути вешаем этот middleware
 export const config = {
   matcher: [
-    // всё, кроме статики и картинок
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // Всё что не статика
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };
