@@ -1,92 +1,52 @@
 import { cookies } from 'next/headers';
-import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 
-type TypedSupabaseClient = SupabaseClient;
-
-type CookieOptions = {
-  domain?: string;
-  expires?: Date;
-  httpOnly?: boolean;
-  maxAge?: number;
-  path?: string;
-  sameSite?: 'lax' | 'strict' | 'none';
-  secure?: boolean;
-};
-
-let serviceClient: TypedSupabaseClient | null = null;
-
-function requireEnv(name: string, value: string | undefined): string {
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
-
-export function getServerSupabase(): TypedSupabaseClient {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase environment variables are not configured');
-  }
-
+// обычный серверный клиент - ходит в базу как текущий юзер (RLS работает)
+export function getServerSupabase() {
   const cookieStore = cookies();
 
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        },
       },
-      set(name: string, value: string, options?: CookieOptions) {
-        cookieStore.set({ name, value, ...options });
-      },
-      remove(name: string, options?: CookieOptions) {
-        cookieStore.set({ name, value: '', ...options, maxAge: 0 });
-      }
     }
-  });
+  );
+
+  return supabase;
 }
 
-export function getServiceSupabase(): TypedSupabaseClient {
-  if (serviceClient) {
-    return serviceClient;
-  }
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL);
-  const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY', process.env.SUPABASE_SERVICE_ROLE_KEY);
-
-  serviceClient = createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
+// админ-клиент (service_role), можем апдейтить read_at и т.д.
+// НИКОГДА не использовать это на клиенте.
+export function getServiceSupabase() {
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
     }
-  });
-
-  return serviceClient;
+  );
+  return supabaseAdmin;
 }
 
-export type CurrentUser = Pick<User, 'id' | 'email' | 'app_metadata' | 'user_metadata'> & {
-  aud?: string;
-};
-
-export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return null;
-  }
-
+// достаём текущего авторизованного юзера из куков
+export async function getCurrentUser() {
   const supabase = getServerSupabase();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    return null;
-  }
-
-  return user;
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data?.user) return null;
+  return data.user; // { id: string, email?: string, ... }
 }
