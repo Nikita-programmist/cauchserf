@@ -4,7 +4,9 @@
 import { useEffect } from 'react';
 import { getBrowserSupabase } from '@/lib/supabaseClient';
 
-// подписка на realtime апдейты по конкретному conversation_id
+// conversationId — это ИД чата (uuid из таблицы conversations)
+// onNewMessage     → вызываем при INSERT нового сообщения
+// onMessageUpdate  → вызываем при UPDATE (например read_at изменился)
 export function useRealtimeConversation(
   conversationId: string,
   onNewMessage: (msg: {
