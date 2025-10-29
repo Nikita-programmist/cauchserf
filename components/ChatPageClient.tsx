@@ -3,11 +3,14 @@
 import { useEffect, useState } from 'react';
 import ConversationList from '@/components/chat/ConversationList';
 import ChatWindow from '@/components/ChatWindow';
+import { cn } from '@/lib/utils';
 
 export default function ChatPageClient({
   currentUserId,
+  className,
 }: {
   currentUserId: string;
+  className?: string;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -33,7 +36,12 @@ export default function ChatPageClient({
   }, [activeId]);
 
   return (
-    <div className="flex h-[calc(100vh-2rem)] border rounded-lg overflow-hidden bg-white">
+    <div
+      className={cn(
+        'flex h-[calc(100vh-2rem)] border rounded-lg overflow-hidden bg-white',
+        className
+      )}
+    >
       <ConversationList
         onSelect={(id) => setActiveId(id)}
         selectedConversationId={activeId}
