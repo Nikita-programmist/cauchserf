@@ -1,202 +1,82 @@
+
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-type ConversationListItem = {
-  id: string;
-  lastMessageText: string | null;
-  lastMessageAt: string | null;
-  otherUser: {
-    id: string;
-    name: string | null;
-    avatarUrl: string | null;
-  };
-  unreadCount: number;
-};
-
-type Props = {
-  onSelect: (conversationId: string) => void;
-};
-
-function timeAgo(value: string | null): string {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-
+function timeAgo(iso?: string | null) {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
   const now = Date.now();
-  const diff = Math.max(0, now - date.getTime());
-
-  const minute = 60 * 1000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-
-  if (diff < minute) {
-    return 'just now';
-  }
-  if (diff < hour) {
-    const minutes = Math.floor(diff / minute);
-    return `${minutes}m ago`;
-  }
-  if (diff < day) {
-    const hours = Math.floor(diff / hour);
-    return `${hours}h ago`;
-  }
-
-  return date.toLocaleDateString();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return diffMin + 'm';
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return diffH + 'h';
+  const diffD = Math.floor(diffH / 24);
+  return diffD + 'd';
 }
 
-export default function ConversationList({ onSelect }: Props) {
-  const [items, setItems] = useState<ConversationListItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+export default function ConversationList({
+  onSelect,
+}: {
+  onSelect: (conversationId: string) => void;
+}) {
+  const [items, setItems] = useState<any[]>([]);
 
   useEffect(() => {
-    let active = true;
-    const fetchConversations = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch('/api/conversations', { credentials: 'include' });
-        if (!res.ok) {
-          const payload = await res.json().catch(() => ({ error: 'Failed to load conversations' }));
-          throw new Error(payload.error ?? 'Failed to load conversations');
-        }
-        const data = (await res.json()) as ConversationListItem[];
-        if (!active) return;
-        setItems(data);
-      } catch (err) {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : 'Failed to load conversations');
-      } finally {
-        if (!active) return;
-        setLoading(false);
-      }
-    };
-
-    fetchConversations();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (selectedId) return;
-    if (items.length === 0) return;
-    setSelectedId(items[0].id);
-    onSelect(items[0].id);
-  }, [items, onSelect, selectedId]);
-
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const customEvent = event as CustomEvent<{
-        conversationId: string;
-        lastMessageText: string;
-        lastMessageAt: string;
-        unreadCount: number;
-      }>;
-      const detail = customEvent.detail;
-      if (!detail) return;
-      setItems((prev) => {
-        const index = prev.findIndex((item) => item.id === detail.conversationId);
-        if (index === -1) {
-          return prev;
-        }
-        const updated = [...prev];
-        updated[index] = {
-          ...updated[index],
-          lastMessageText: detail.lastMessageText,
-          lastMessageAt: detail.lastMessageAt,
-          unreadCount: detail.unreadCount
-        };
-        return updated;
+    (async () => {
+      const res = await fetch('/api/conversations', {
+        method: 'GET',
+        credentials: 'include',
       });
-    };
-
-    window.addEventListener('conversation:update', handler);
-
-    return () => {
-      window.removeEventListener('conversation:update', handler);
-    };
+      const data = await res.json();
+      setItems(Array.isArray(data) ? data : []);
+    })();
   }, []);
 
-  const content = useMemo(() => {
-    if (loading) {
-      return <div className="p-4 text-sm text-neutral-500">Loading…</div>;
-    }
+  return (
+    <div className="flex flex-col border-r w-64 max-w-64 overflow-y-auto bg-white">
+      {items.map((conv) => (
+        <button
+          key={conv.id}
+          className="flex items-start gap-2 p-3 text-left hover:bg-neutral-100 border-b w-full"
+          onClick={() => onSelect(conv.id)}
+        >
+          <div className="w-10 h-10 rounded-full bg-neutral-300 flex items-center justify-center overflow-hidden text-sm font-semibold">
+            {conv.otherUser.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={conv.otherUser.avatarUrl}
+                alt={conv.otherUser.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span>{conv.otherUser.name?.[0] ?? 'U'}</span>
+            )}
+          </div>
 
-    if (error) {
-      return (
-        <div className="p-4 text-sm text-red-500">
-          <p>{error}</p>
-        </div>
-      );
-    }
+          <div className="flex-1 min-w-0">
+            <div className="flex justify-between text-sm font-medium">
+              <span className="truncate">{conv.otherUser.name}</span>
+              <span className="text-[11px] text-neutral-500">
+                {timeAgo(conv.lastMessageAt)}
+              </span>
+            </div>
 
-    if (items.length === 0) {
-      return <div className="p-4 text-sm text-neutral-500">No conversations yet.</div>;
-    }
-
-    return (
-      <ul className="flex flex-col">
-        {items.map((item) => {
-          const isActive = selectedId === item.id;
-          const displayName = item.otherUser.name ?? 'Unknown user';
-          const preview = item.lastMessageText?.trim() || 'No messages yet';
-          const timestamp = timeAgo(item.lastMessageAt);
-
-          return (
-            <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedId(item.id);
-                  onSelect(item.id);
-                  setItems((prev) =>
-                    prev.map((conv) =>
-                      conv.id === item.id
-                        ? {
-                            ...conv,
-                            unreadCount: 0
-                          }
-                        : conv
-                    )
-                  );
-                }}
-                className={`flex w-full items-start gap-3 border-b border-neutral-200 p-3 text-left transition hover:bg-neutral-100 ${
-                  isActive ? 'bg-neutral-100' : ''
-                }`}
-              >
-                <div className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-full bg-neutral-200 text-sm font-semibold text-neutral-600">
-                  {item.otherUser.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.otherUser.avatarUrl} alt={displayName} className="h-full w-full object-cover" />
-                  ) : (
-                    <span>{displayName.charAt(0).toUpperCase()}</span>
-                  )}
-                </div>
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-neutral-900">{displayName}</p>
-                    {timestamp && <span className="text-xs text-neutral-500">{timestamp}</span>}
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-neutral-600">
-                    <p className="line-clamp-1 flex-1 text-neutral-600">{preview}</p>
-                    {item.unreadCount > 0 && (
-                      <span className="inline-flex min-w-[1.5rem] justify-center rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white">
-                        {item.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    );
-  }, [error, items, loading, onSelect, selectedId]);
-
-  return <div className="flex h-full max-h-full flex-col border-r border-neutral-200 bg-white">{content}</div>;
+            <div className="text-xs text-neutral-600 flex items-center gap-2">
+              <span className="truncate">
+                {conv.lastMessageText || '...'}
+              </span>
+              {conv.unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                  {conv.unreadCount}
+                </span>
+              )}
+            </div>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
 }
