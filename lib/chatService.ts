@@ -1,321 +1,258 @@
-import { getServerSupabase, getServiceSupabase } from './supabaseServer';
+import { getServerSupabase, getServiceSupabase } from '@/lib/supabaseServer';
 
-export class ChatServiceError extends Error {
-  status: number;
+// ВАЖНО: ниже используются таблицы, которые ты уже создал в Supabase SQL:
+// conversations, messages, conversation_bookings, bookings, profiles
 
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
+// Создаёт (или возвращает существующий) чат для конкретной брони
+// Логика: одна бронь = один приватный диалог traveler<->host
+export async function getOrCreateConversationForBooking(bookingId: string) {
+  const admin = getServiceSupabase();
 
-type ConversationRow = {
-  id: string;
-  traveler_id: string;
-  host_id: string;
-  last_message_text: string | null;
-  last_message_at: string | null;
-  created_at?: string;
-};
-
-type ProfileRow = {
-  id: string;
-  name: string | null;
-  avatar_url: string | null;
-};
-
-function mapProfile(profile: ProfileRow | undefined | null, fallbackId: string) {
-  return {
-    id: profile?.id ?? fallbackId,
-    name: profile?.name ?? null,
-    avatarUrl: profile?.avatar_url ?? null
-  };
-}
-
-export async function getOrCreateConversationForBooking(bookingId: string): Promise<string> {
-  if (!bookingId) {
-    throw new ChatServiceError(400, 'Booking id is required');
-  }
-
-  const service = getServiceSupabase();
-
-  const { data: booking, error: bookingError } = await service
+  // 1. найти бронирование
+  const { data: booking, error: bookingErr } = await admin
     .from('bookings')
     .select('id, traveler_id, host_id')
     .eq('id', bookingId)
-    .maybeSingle();
+    .single();
 
-  if (bookingError) {
-    throw new ChatServiceError(500, bookingError.message);
+  if (bookingErr || !booking) {
+    throw new Error('booking not found');
   }
 
-  if (!booking) {
-    throw new ChatServiceError(404, 'Booking not found');
-  }
-
-  const { data: existingLink, error: linkError } = await service
+  // 2. проверить, уже связана ли эта бронь с разговором
+  const { data: existingLink, error: linkErr } = await admin
     .from('conversation_bookings')
     .select('conversation_id')
-    .eq('booking_id', booking.id)
+    .eq('booking_id', bookingId)
     .maybeSingle();
 
-  if (linkError) {
-    throw new ChatServiceError(500, linkError.message);
+  if (!linkErr && existingLink?.conversation_id) {
+    return existingLink.conversation_id as string;
   }
 
-  if (existingLink?.conversation_id) {
-    return existingLink.conversation_id;
-  }
-
-  const { data: insertedConversation, error: conversationError } = await service
+  // 3. создать новый conversation
+  const { data: conv, error: convErr } = await admin
     .from('conversations')
-    .insert({ traveler_id: booking.traveler_id, host_id: booking.host_id })
+    .insert({
+      traveler_id: booking.traveler_id,
+      host_id: booking.host_id,
+    })
     .select('id')
     .single();
 
-  if (conversationError) {
-    throw new ChatServiceError(500, conversationError.message);
+  if (convErr || !conv) {
+    throw new Error('failed to create conversation');
   }
 
-  const conversationId = insertedConversation.id;
-
-  const { error: linkInsertError } = await service
+  // 4. связать booking -> conversation
+  const { error: insertErr } = await admin
     .from('conversation_bookings')
-    .insert({ booking_id: booking.id, conversation_id: conversationId });
+    .insert({
+      booking_id: booking.id,
+      conversation_id: conv.id,
+    });
 
-  if (linkInsertError) {
-    if (linkInsertError.code === '23505') {
-      const { data: existing, error: existingError } = await service
-        .from('conversation_bookings')
-        .select('conversation_id')
-        .eq('booking_id', booking.id)
-        .maybeSingle();
-      if (existingError) {
-        throw new ChatServiceError(500, existingError.message);
-      }
-      if (existing?.conversation_id) {
-        return existing.conversation_id;
-      }
-    }
-    throw new ChatServiceError(500, linkInsertError.message);
+  if (insertErr) {
+    throw new Error('failed to link conversation');
   }
 
-  return conversationId;
+  return conv.id as string;
 }
 
-export async function getConversationRowForUser(
+// внутренняя утилита: убеждаемся что юзер реально участник разговора
+async function getConversationRowForUser(
   conversationId: string,
   userId: string
-): Promise<ConversationRow | null> {
+) {
   const supabase = getServerSupabase();
-  const { data, error } = await supabase
+
+  const { data: convo, error } = await supabase
     .from('conversations')
-    .select('id, traveler_id, host_id, last_message_text, last_message_at, created_at')
+    .select('id, traveler_id, host_id')
     .eq('id', conversationId)
     .maybeSingle();
 
-  if (error) {
-    throw new ChatServiceError(500, error.message);
-  }
+  if (error || !convo) return null;
 
-  if (!data) {
-    return null;
-  }
+  const allowed =
+    convo.traveler_id === userId || convo.host_id === userId;
 
-  if (data.traveler_id !== userId && data.host_id !== userId) {
-    return null;
-  }
+  if (!allowed) return null;
 
-  return data;
+  return convo;
 }
 
+// список всех диалогов текущего юзера + превью
 export async function listConversationsForUser(userId: string) {
-  if (!userId) {
-    throw new ChatServiceError(400, 'User id is required');
-  }
-
   const supabase = getServerSupabase();
-  const { data, error } = await supabase
+  const admin = getServiceSupabase();
+
+  // RLS уже не отдаст чужие разговоры, так что можно без фильтра .or()
+  const { data: convs, error } = await supabase
     .from('conversations')
-    .select('id, traveler_id, host_id, last_message_text, last_message_at, created_at')
-    .or(`traveler_id.eq.${userId},host_id.eq.${userId}`)
-    .order('last_message_at', { ascending: false, nullsLast: true })
-    .order('created_at', { ascending: false });
+    .select(
+      'id, traveler_id, host_id, last_message_text, last_message_at'
+    )
+    .order('last_message_at', { ascending: false });
 
-  if (error) {
-    throw new ChatServiceError(500, error.message);
-  }
+  if (error) throw error;
 
-  const conversations = data ?? [];
-  const conversationIds = conversations.map((item) => item.id);
-  const otherUserIds = conversations.reduce<Set<string>>((acc, item) => {
-    const otherId = item.traveler_id === userId ? item.host_id : item.traveler_id;
-    if (otherId) {
-      acc.add(otherId);
-    }
-    return acc;
-  }, new Set());
+  const result: any[] = [];
 
-  const service = getServiceSupabase();
+  for (const conv of convs ?? []) {
+    const otherUserId =
+      conv.traveler_id === userId ? conv.host_id : conv.traveler_id;
 
-  const profilesMap = new Map<string, ProfileRow>();
-  if (otherUserIds.size > 0) {
-    const { data: profilesData, error: profilesError } = await service
+    // инфа о собеседнике
+    const { data: profile } = await admin
       .from('profiles')
       .select('id, name, avatar_url')
-      .in('id', Array.from(otherUserIds));
+      .eq('id', otherUserId)
+      .maybeSingle();
 
-    if (profilesError) {
-      throw new ChatServiceError(500, profilesError.message);
-    }
-
-    (profilesData ?? []).forEach((profile) => {
-      profilesMap.set(profile.id, profile);
-    });
-  }
-
-  const unreadCounts = new Map<string, number>();
-  if (conversationIds.length > 0) {
-    const { data: unreadData, error: unreadError } = await service
+    // сколько у меня непрочитанных
+    const { count: unreadCount } = await admin
       .from('messages')
-      .select('conversation_id')
-      .in('conversation_id', conversationIds)
+      .select('id', { count: 'exact', head: true })
+      .eq('conversation_id', conv.id)
       .neq('sender_id', userId)
       .is('read_at', null);
 
-    if (unreadError) {
-      throw new ChatServiceError(500, unreadError.message);
-    }
-
-    (unreadData ?? []).forEach((row) => {
-      const current = unreadCounts.get(row.conversation_id) ?? 0;
-      unreadCounts.set(row.conversation_id, current + 1);
+    result.push({
+      id: conv.id,
+      lastMessageText: conv.last_message_text ?? '',
+      lastMessageAt: conv.last_message_at ?? null,
+      otherUser: {
+        id: profile?.id ?? otherUserId,
+        name: profile?.name ?? 'User',
+        avatarUrl: profile?.avatar_url ?? null,
+      },
+      unreadCount: unreadCount ?? 0,
     });
   }
 
-  return conversations.map((conversation) => {
-    const otherId = conversation.traveler_id === userId ? conversation.host_id : conversation.traveler_id;
-    const otherProfile = profilesMap.get(otherId);
-
-    return {
-      id: conversation.id,
-      lastMessageText: conversation.last_message_text,
-      lastMessageAt: conversation.last_message_at,
-      otherUser: mapProfile(otherProfile, otherId),
-      unreadCount: unreadCounts.get(conversation.id) ?? 0
-    };
-  });
+  return result;
 }
 
-export async function getConversationWithMessages(conversationId: string, userId: string) {
-  if (!userId) {
-    throw new ChatServiceError(400, 'User id is required');
-  }
-
-  const conversation = await getConversationRowForUser(conversationId, userId);
-
-  if (!conversation) {
-    throw new ChatServiceError(403, 'Conversation not accessible');
+// одна конкретная беседа + история сообщений
+export async function getConversationWithMessages(
+  conversationId: string,
+  userId: string
+) {
+  const convRow = await getConversationRowForUser(conversationId, userId);
+  if (!convRow) {
+    throw new Error('forbidden');
   }
 
   const supabase = getServerSupabase();
-  const { data: messagesData, error: messagesError } = await supabase
+  const admin = getServiceSupabase();
+
+  // сами сообщения (юзер-клиент => RLS не даст левые чаты)
+  const { data: msgs, error: msgErr } = await supabase
     .from('messages')
     .select('id, sender_id, text, created_at, read_at')
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true });
 
-  if (messagesError) {
-    throw new ChatServiceError(500, messagesError.message);
-  }
+  if (msgErr) throw msgErr;
 
-  const service = getServiceSupabase();
-  const participantIds = [conversation.traveler_id, conversation.host_id];
-  const { data: profileRows, error: profileError } = await service
+  // собираем инфу про меня и собеседника
+  const otherUserId =
+    convRow.traveler_id === userId ? convRow.host_id : convRow.traveler_id;
+
+  const { data: meProfile } = await admin
     .from('profiles')
     .select('id, name, avatar_url')
-    .in('id', participantIds);
+    .eq('id', userId)
+    .maybeSingle();
 
-  if (profileError) {
-    throw new ChatServiceError(500, profileError.message);
-  }
-
-  const profileMap = new Map<string, ProfileRow>();
-  (profileRows ?? []).forEach((profile) => {
-    profileMap.set(profile.id, profile);
-  });
-
-  const otherId = conversation.traveler_id === userId ? conversation.host_id : conversation.traveler_id;
+  const { data: otherProfile } = await admin
+    .from('profiles')
+    .select('id, name, avatar_url')
+    .eq('id', otherUserId)
+    .maybeSingle();
 
   return {
-    conversationId: conversation.id,
-    me: mapProfile(profileMap.get(userId), userId),
-    otherUser: mapProfile(profileMap.get(otherId), otherId),
-    messages: (messagesData ?? []).map((message) => ({
-      id: message.id,
-      senderId: message.sender_id,
-      text: message.text,
-      createdAt: message.created_at,
-      readAt: message.read_at
-    }))
+    conversationId,
+    me: {
+      id: userId,
+      name: meProfile?.name ?? 'Me',
+      avatarUrl: meProfile?.avatar_url ?? null,
+    },
+    otherUser: {
+      id: otherUserId,
+      name: otherProfile?.name ?? 'User',
+      avatarUrl: otherProfile?.avatar_url ?? null,
+    },
+    messages: (msgs ?? []).map((m: any) => ({
+      id: m.id,
+      senderId: m.sender_id,
+      text: m.text,
+      createdAt: m.created_at,
+      readAt: m.read_at,
+    })),
   };
 }
 
-export async function sendMessage(conversationId: string, userId: string, text: string) {
-  const trimmed = text.trim();
+// отправить новое сообщение
+export async function sendMessage(
+  conversationId: string,
+  userId: string,
+  text: string
+) {
+  const clean = text.trim();
+  if (!clean) throw new Error('empty');
 
-  if (!trimmed) {
-    throw new ChatServiceError(400, 'Message text is required');
-  }
-
-  const conversation = await getConversationRowForUser(conversationId, userId);
-
-  if (!conversation) {
-    throw new ChatServiceError(403, 'Conversation not accessible');
+  // проверка доступа
+  const convRow = await getConversationRowForUser(conversationId, userId);
+  if (!convRow) {
+    throw new Error('forbidden');
   }
 
   const supabase = getServerSupabase();
+
+  // вставляем сообщение (через юзер-клиент => RLS "insert_messages_if_participant")
   const { data, error } = await supabase
     .from('messages')
-    .insert({ conversation_id: conversationId, sender_id: userId, text: trimmed })
+    .insert({
+      conversation_id: conversationId,
+      sender_id: userId,
+      text: clean,
+    })
     .select('id, sender_id, text, created_at, read_at')
     .single();
 
-  if (error) {
-    throw new ChatServiceError(500, error.message);
-  }
-
-  if (!data) {
-    throw new ChatServiceError(500, 'Failed to send message');
-  }
+  if (error) throw error;
 
   return {
     id: data.id,
     senderId: data.sender_id,
     text: data.text,
     createdAt: data.created_at,
-    readAt: data.read_at
+    readAt: data.read_at,
   };
 }
 
-export async function markConversationRead(conversationId: string, userId: string) {
-  const conversation = await getConversationRowForUser(conversationId, userId);
-
-  if (!conversation) {
-    throw new ChatServiceError(403, 'Conversation not accessible');
+// пометить все входящие как прочитанные (read_at)
+export async function markConversationRead(
+  conversationId: string,
+  userId: string
+) {
+  const convRow = await getConversationRowForUser(conversationId, userId);
+  if (!convRow) {
+    throw new Error('forbidden');
   }
 
-  const service = getServiceSupabase();
-  const { error } = await service
+  const admin = getServiceSupabase();
+
+  const { error } = await admin
     .from('messages')
     .update({ read_at: new Date().toISOString() })
     .eq('conversation_id', conversationId)
     .neq('sender_id', userId)
     .is('read_at', null);
 
-  if (error) {
-    throw new ChatServiceError(500, error.message);
-  }
+  if (error) throw error;
 
   return { ok: true };
 }
