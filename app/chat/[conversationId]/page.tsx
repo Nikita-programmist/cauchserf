@@ -18,6 +18,11 @@ export default function ConversationPage() {
     loading: boolean;
   };
 
+  const userId = useMemo(() => {
+    const rawId = user?.id;
+    return typeof rawId === 'string' && rawId.length > 0 ? rawId : null;
+  }, [user?.id]);
+
   // берём conversationId из URL
   const conversationIdParam = params?.conversationId;
   const initialConversationId = useMemo(() => {
@@ -71,7 +76,7 @@ export default function ConversationPage() {
       </div>
 
       {/* Правая колонка (окно диалога или заглушка) */}
-      {(!user?.id || !selectedConversationId) ? (
+      {!userId || !selectedConversationId ? (
         <div className="flex min-h-[500px] flex-1 items-center justify-center text-neutral-500">
           Чат не выбран
         </div>
@@ -79,7 +84,7 @@ export default function ConversationPage() {
         <div className="flex min-h-[500px] flex-1">
           <ChatWindow
             conversationId={selectedConversationId}
-            currentUserId={user.id}
+            currentUserId={userId}
           />
         </div>
       )}
