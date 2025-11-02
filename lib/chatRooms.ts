@@ -15,6 +15,29 @@ export type ChatRoomListItem = {
   unreadCount: number;
 };
 
+function normalizeProfile(fallbackId: string, raw: any): ProfileSummary {
+  // supabase иногда суёт связку как массив
+  if (Array.isArray(raw) && raw[0]) {
+    return {
+      id: raw[0].id,
+      display_name: raw[0].display_name ?? null,
+      avatar_url: raw[0].avatar_url ?? null,
+    };
+  }
+  if (raw) {
+    return {
+      id: raw.id,
+      display_name: raw.display_name ?? null,
+      avatar_url: raw.avatar_url ?? null,
+    };
+  }
+  return {
+    id: fallbackId,
+    display_name: null,
+    avatar_url: null,
+  };
+}
+
 export async function getCurrentUserProfile() {
   const supabase = getServerSupabase();
   const {
@@ -38,30 +61,50 @@ export async function getCurrentUserProfile() {
   } satisfies ProfileSummary;
 }
 
-function normalizeProfile(fallbackId: string, raw: any): ProfileSummary {
-  // Supabase иногда возвращает связки как массивы.
-  if (Array.isArray(raw) && raw[0]) {
-    return {
-      id: raw[0].id,
-      display_name: raw[0].display_name ?? null,
-      avatar_url: raw[0].avatar_url ?? null,
-    };
+/**
+ * ГЛАВНОЕ: гарантирует, что между currentUser и otherUser есть приватная комната.
+ * если есть — вернёт существующую, если нет — создаст.
+ */
+export async function ensureChatRoom(
+  currentUserId: string,
+  otherUserId: string
+): Promise<{ id: string }> {
+  const supabase = getServerSupabase();
+
+  // сначала ищем, может уже есть в любом порядке
+  const { data: existing } = await supabase
+    .from('chat_rooms')
+    .select('id, traveler_id, host_id')
+    .or(
+      // current -> traveler, other -> host
+      `and(traveler_id.eq.${currentUserId},host_id.eq.${otherUserId}),` +
+        // или наоборот
+        `and(traveler_id.eq.${otherUserId},host_id.eq.${currentUserId})`
+    )
+    .maybeSingle();
+
+  if (existing) {
+    return { id: existing.id as string };
   }
-  if (raw) {
-    return {
-      id: raw.id,
-      display_name: raw.display_name ?? null,
-      avatar_url: raw.avatar_url ?? null,
-    };
+
+  // если нет — создаём. по умолчанию считаем, что инициатор = traveler
+  const { data: inserted, error: insertErr } = await supabase
+    .from('chat_rooms')
+    .insert({
+      traveler_id: currentUserId,
+      host_id: otherUserId,
+    })
+    .select('id')
+    .maybeSingle();
+
+  if (insertErr || !inserted) {
+    throw new Error(insertErr?.message ?? 'cannot create chat room');
   }
-  return {
-    id: fallbackId,
-    display_name: null,
-    avatar_url: null,
-  };
+
+  return { id: inserted.id as string };
 }
 
-// получить room + оба профиля
+// получить одну комнату + оба профиля
 export async function getChatRoomWithProfiles(roomId: string) {
   const supabase = getServerSupabase();
 
@@ -134,7 +177,7 @@ export async function listUserChatRooms(userId: string): Promise<ChatRoomListIte
 
     const last = lastMessages?.[0] ?? null;
 
-    // счётчик непрочитанных
+    // непрочитанные
     const { count: unreadCount } = await supabase
       .from('chat_messages')
       .select('id', { count: 'exact', head: true })
@@ -151,7 +194,7 @@ export async function listUserChatRooms(userId: string): Promise<ChatRoomListIte
     });
   }
 
-  // сортировка — самый свежий диалог сверху
+  // сортируем по последнему сообщению
   results.sort((a, b) => {
     if (!a.lastMessageAt && !b.lastMessageAt) return 0;
     if (!a.lastMessageAt) return 1;
@@ -164,3 +207,4 @@ export async function listUserChatRooms(userId: string): Promise<ChatRoomListIte
 
   return results;
 }
+
