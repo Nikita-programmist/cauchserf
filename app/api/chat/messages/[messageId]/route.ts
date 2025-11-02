@@ -1,6 +1,7 @@
+// app/api/chat/messages/[messageId]/route.ts
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function PATCH(
   req: Request,
@@ -89,3 +90,4 @@ export async function DELETE(
 
   return NextResponse.json(updated);
 }
+
