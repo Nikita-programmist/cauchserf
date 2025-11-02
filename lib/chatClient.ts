@@ -4,7 +4,7 @@ export async function sendChatMessage(conversationId: string, text: string) {
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ text })
+    body: JSON.stringify({ content: text })
   });
 
   if (!response.ok) {

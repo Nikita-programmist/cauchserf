@@ -1,13 +1,11 @@
-// app/api/chat/messages/[messageId]/route.ts
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 export async function PATCH(
   req: Request,
   { params }: { params: { messageId: string } }
 ) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = getServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -16,46 +14,41 @@ export async function PATCH(
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const { body } = await req.json();
-  const text = typeof body === 'string' ? body.trim() : '';
+  const body = await req.json();
+  const content = typeof body?.content === 'string' ? body.content.trim() : '';
 
-  if (!text) {
+  if (!content) {
     return NextResponse.json({ error: 'empty' }, { status: 400 });
   }
 
-  const { data: msg } = await supabase
-    .from('chat_messages')
-    .select('id, sender_id')
+  const { data, error } = await supabase
+    .from('messages')
+    .update({ text: content, edited_at: new Date().toISOString() })
     .eq('id', params.messageId)
-    .maybeSingle();
+    .eq('sender_id', user.id)
+    .select('id, sender_id, text, created_at, edited_at')
+    .single();
 
-  if (!msg || msg.sender_id !== user.id) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  const { data: updated, error: updErr } = await supabase
-    .from('chat_messages')
-    .update({
-      body: text,
-      edited_at: new Date().toISOString(),
-      deleted_at: null,
-    })
-    .eq('id', params.messageId)
-    .select()
-    .maybeSingle();
-
-  if (updErr) {
-    return NextResponse.json({ error: updErr.message }, { status: 500 });
-  }
-
-  return NextResponse.json(updated);
+  return NextResponse.json({
+    message: {
+      id: data.id,
+      content: data.text,
+      sender_id: data.sender_id,
+      created_at: data.created_at,
+      edited_at: data.edited_at ?? null,
+    },
+  });
 }
 
 export async function DELETE(
   _req: Request,
   { params }: { params: { messageId: string } }
 ) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = getServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -64,30 +57,15 @@ export async function DELETE(
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const { data: msg } = await supabase
-    .from('chat_messages')
-    .select('id, sender_id')
+  const { error } = await supabase
+    .from('messages')
+    .delete()
     .eq('id', params.messageId)
-    .maybeSingle();
+    .eq('sender_id', user.id);
 
-  if (!msg || msg.sender_id !== user.id) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  const { data: updated, error: updErr } = await supabase
-    .from('chat_messages')
-    .update({
-      body: 'Сообщение удалено',
-      deleted_at: new Date().toISOString(),
-    })
-    .eq('id', params.messageId)
-    .select()
-    .maybeSingle();
-
-  if (updErr) {
-    return NextResponse.json({ error: updErr.message }, { status: 500 });
-  }
-
-  return NextResponse.json(updated);
+  return NextResponse.json({ success: true });
 }
-

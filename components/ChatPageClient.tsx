@@ -1,22 +1,26 @@
-import ChatWindow from '@/components/ChatWindow';
+import ChatWindow from '@/components/chat/ChatWindow';
 import ConversationList from '@/components/chat/ConversationList';
-import type { ChatRoomListItem } from '@/lib/chatRooms';
+import type { ConversationListItem } from '@/lib/chatService';
 import { cn } from '@/lib/utils';
 
 type ChatPageClientProps = {
   currentUserId: string;
-  initialItems: ChatRoomListItem[];
+  initialItems: ConversationListItem[];
   className?: string;
-  activeRoomId?: string | null;
+  activeConversationId?: string | null;
 };
 
 export default function ChatPageClient({
   currentUserId,
   initialItems,
   className,
-  activeRoomId,
+  activeConversationId,
 }: ChatPageClientProps) {
-  const selectedRoomId = activeRoomId ?? initialItems[0]?.roomId ?? null;
+  const firstConversation = initialItems.find((item) => item.conversationId);
+  const selectedConversationId = activeConversationId ?? firstConversation?.conversationId ?? null;
+  const selectedConversation = initialItems.find(
+    (item) => item.conversationId === selectedConversationId
+  );
 
   return (
     <div
@@ -25,10 +29,43 @@ export default function ChatPageClient({
         className
       )}
     >
-      <ConversationList items={initialItems} selectedConversationId={selectedRoomId} />
+      <ConversationList items={initialItems} selectedConversationId={selectedConversationId} />
       <div className="flex flex-1 flex-col">
-        {selectedRoomId ? (
-          <ChatWindow roomId={selectedRoomId} currentUserId={currentUserId} />
+        {selectedConversationId ? (
+          <ChatWindow
+            conversationId={selectedConversationId}
+            currentUserId={currentUserId}
+            header={
+              selectedConversation ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-neutral-200 text-sm font-semibold text-neutral-600">
+                    {selectedConversation.otherUser.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={selectedConversation.otherUser.avatarUrl}
+                        alt={selectedConversation.otherUser.name ?? 'Собеседник'}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span>
+                        {selectedConversation.otherUser.name?.charAt(0)?.toUpperCase() ?? 'U'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold text-neutral-900">
+                      {selectedConversation.otherUser.name ?? 'Собеседник'}
+                    </span>
+                    <span className="text-[11px] text-neutral-500">
+                      {selectedConversation.type === 'stay_request'
+                        ? 'заявка путешественника'
+                        : 'личный диалог'}
+                    </span>
+                  </div>
+                </div>
+              ) : undefined
+            }
+          />
         ) : (
           <div className="flex flex-1 items-center justify-center bg-white/60 text-sm text-neutral-500">
             Выберите чат, чтобы начать переписку

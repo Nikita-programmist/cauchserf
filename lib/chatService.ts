@@ -9,6 +9,21 @@ type ProfileRow = {
   name?: string | null;
 };
 
+export type ConversationListItem = {
+  id: string;
+  conversationId: string | null;
+  type: 'conversation' | 'stay_request';
+  requestId: string | null;
+  lastMessageText: string;
+  lastMessageAt: string | null;
+  otherUser: {
+    id: string | null;
+    name: string;
+    avatarUrl: string | null;
+  };
+  unreadCount: number;
+};
+
 function resolveProfileName(profile: ProfileRow | null, fallback: string) {
   if (!profile) return fallback;
 
@@ -127,7 +142,7 @@ async function getConversationRowForUser(
 }
 
 // список всех диалогов текущего юзера + превью
-export async function listConversationsForUser(userId: string) {
+export async function listConversationsForUser(userId: string): Promise<ConversationListItem[]> {
   const supabase = getServerSupabase();
   const admin = getServiceSupabase();
 
@@ -208,7 +223,7 @@ export async function listConversationsForUser(userId: string) {
     }
   }
 
-  const result: any[] = [];
+  const result: ConversationListItem[] = [];
 
   for (const conv of convs ?? []) {
     const otherUserId =
@@ -223,7 +238,7 @@ export async function listConversationsForUser(userId: string) {
       lastMessageText: conv.last_message_text ?? '',
       lastMessageAt: conv.last_message_at ?? null,
       otherUser: {
-        id: otherUserId,
+        id: otherUserId ?? null,
         name: resolveProfileName(profile, 'User'),
         avatarUrl: resolveAvatarUrl(profile),
       },
@@ -242,13 +257,13 @@ export async function listConversationsForUser(userId: string) {
 
     result.push({
       id: `request-${request.id}`,
-      conversationId: request.conversation_id,
+      conversationId: request.conversation_id ?? null,
       type: 'stay_request',
       requestId: request.id,
       lastMessageText: request.message ?? '',
       lastMessageAt: request.created_at ?? null,
       otherUser: {
-        id: otherUserId,
+        id: otherUserId ?? null,
         name: resolveProfileName(
           profile,
           isTraveler ? 'Хост' : 'Путешественник'
@@ -284,7 +299,7 @@ export async function getConversationWithMessages(
   // сами сообщения (юзер-клиент => RLS не даст левые чаты)
   const { data: msgs, error: msgErr } = await supabase
     .from('messages')
-    .select('id, sender_id, text, created_at, read_at')
+    .select('id, sender_id, text, created_at, read_at, edited_at, deleted_at')
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true });
 
@@ -324,6 +339,8 @@ export async function getConversationWithMessages(
       text: m.text,
       createdAt: m.created_at,
       readAt: m.read_at,
+      editedAt: m.edited_at,
+      deletedAt: m.deleted_at,
     })),
   };
 }

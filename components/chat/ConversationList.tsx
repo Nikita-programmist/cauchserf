@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import type { ChatRoomListItem } from '@/lib/chatRooms';
+import type { ConversationListItem } from '@/lib/chatService';
 
 type ConversationListProps = {
-  items: ChatRoomListItem[];
+  items: ConversationListItem[];
   selectedConversationId: string | null;
 };
 
@@ -38,15 +38,56 @@ export default function ConversationList({
   return (
     <div className="flex w-80 flex-col overflow-y-auto border-r border-white/10 bg-white/30">
       {items.map((item) => {
-        const isActive = selectedConversationId === item.roomId;
+        const isActive = selectedConversationId === item.conversationId;
         const lastMessageTime = item.lastMessageAt
           ? formatter.format(new Date(item.lastMessageAt))
           : null;
 
+        if (!item.conversationId) {
+          return (
+            <div
+              key={item.id}
+              className={`flex w-full gap-4 px-5 py-4 text-left transition ${
+                isActive
+                  ? 'bg-blue-50/90 text-neutral-900 shadow-inner'
+                  : 'bg-white/40 text-neutral-800 hover:bg-white/70'
+              } cursor-not-allowed opacity-60`}
+            >
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-neutral-200 text-sm font-semibold text-neutral-600">
+                {item.otherUser.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.otherUser.avatarUrl}
+                    alt={item.otherUser.name ?? 'Аватар'}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span>{getInitials(item.otherUser.name)}</span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-semibold text-neutral-900">
+                    {item.otherUser.name ?? 'Без имени'}
+                  </p>
+                  {lastMessageTime ? (
+                    <span className="flex-shrink-0 text-[11px] text-neutral-500">
+                      {lastMessageTime}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 line-clamp-2 text-xs text-neutral-600">
+                  {item.lastMessageText || 'Нет сообщений'}
+                </p>
+              </div>
+            </div>
+          );
+        }
+
         return (
           <Link
-            key={item.roomId}
-            href={`/chat/${item.roomId}`}
+            key={item.id}
+            href={`/chat/${item.conversationId}`}
             className={`flex w-full gap-4 px-5 py-4 text-left transition ${
               isActive
                 ? 'bg-blue-50/90 text-neutral-900 shadow-inner'
@@ -54,21 +95,21 @@ export default function ConversationList({
             }`}
           >
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-neutral-200 text-sm font-semibold text-neutral-600">
-              {item.otherUser.avatar_url ? (
+              {item.otherUser.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={item.otherUser.avatar_url}
-                  alt={item.otherUser.display_name ?? 'Аватар'}
+                  src={item.otherUser.avatarUrl}
+                  alt={item.otherUser.name ?? 'Аватар'}
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <span>{getInitials(item.otherUser.display_name)}</span>
+                <span>{getInitials(item.otherUser.name)}</span>
               )}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
                 <p className="truncate text-sm font-semibold text-neutral-900">
-                  {item.otherUser.display_name ?? 'Без имени'}
+                  {item.otherUser.name ?? 'Без имени'}
                 </p>
                 {lastMessageTime ? (
                   <span className="flex-shrink-0 text-[11px] text-neutral-500">

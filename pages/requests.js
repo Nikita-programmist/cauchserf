@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import BackToHomeLink from '../components/BackToHomeLink';
+import ChatWindow from '../components/chat/ChatWindow';
 import { supabase } from '../lib/supabaseClient';
 
 const genderLabels = {
@@ -32,6 +33,9 @@ export default function RequestsPage() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeConversationId, setActiveConversationId] = useState(null);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -125,11 +129,43 @@ export default function RequestsPage() {
   const isHost = profile?.role === 'host';
 
   const handleOpenChat = useCallback(
-    (conversationId) => {
-      if (!conversationId) return;
-      router.push(`/chat/${conversationId}`);
+    async (request) => {
+      if (!request) return;
+      setChatError('');
+
+      if (request.conversation_id) {
+        setActiveConversationId(request.conversation_id);
+        return;
+      }
+
+      setChatLoading(true);
+
+      try {
+        const response = await fetch(`/api/stay-requests/${request.id}/ensure-conversation`, {
+          method: 'POST',
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data?.conversationId) {
+          throw new Error(data?.error ?? 'failed');
+        }
+
+        setActiveConversationId(data.conversationId);
+        setRequests((prev) =>
+          prev.map((item) =>
+            item.id === request.id
+              ? { ...item, conversation_id: data.conversationId }
+              : item
+          )
+        );
+      } catch (err) {
+        setChatError('Не удалось открыть чат. Попробуйте позже.');
+      } finally {
+        setChatLoading(false);
+      }
     },
-    [router]
+    []
   );
 
   const content = useMemo(() => {
@@ -158,22 +194,23 @@ export default function RequestsPage() {
     }
 
     return (
-      <div className="glass flex flex-col gap-6 px-8 py-10">
-        <div className="flex flex-col gap-2">
-          <p className="text-xs uppercase tracking-[0.3em] text-fg/60">Входящие</p>
-          <h1 className="text-2xl font-semibold text-fg">Заявки гостей</h1>
-          <p className="text-sm text-fg/70">Здесь появляются запросы путешественников на проживание.</p>
-        </div>
-        {requests.length === 0 ? (
-          <div className="rounded-3xl border border-white/15 bg-white/5 px-6 py-10 text-center text-sm text-fg/70">
-            <p className="text-base font-medium text-fg">Пока нет заявок</p>
-            <p className="mt-2 text-sm text-fg/60">
-              Когда путешественники попросятся в гости, вы увидите их тут.
-            </p>
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="glass flex flex-1 flex-col gap-6 px-8 py-10">
+          <div className="flex flex-col gap-2">
+            <p className="text-xs uppercase tracking-[0.3em] text-fg/60">Входящие</p>
+            <h1 className="text-2xl font-semibold text-fg">Заявки гостей</h1>
+            <p className="text-sm text-fg/70">Здесь появляются запросы путешественников на проживание.</p>
           </div>
-        ) : (
-          <div className="flex flex-col gap-6">
-            {requests.map((request) => {
+          {requests.length === 0 ? (
+            <div className="rounded-3xl border border-white/15 bg-white/5 px-6 py-10 text-center text-sm text-fg/70">
+              <p className="text-base font-medium text-fg">Пока нет заявок</p>
+              <p className="mt-2 text-sm text-fg/60">
+                Когда путешественники попросятся в гости, вы увидите их тут.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-6">
+              {requests.map((request) => {
               const traveler = request.traveler;
               const fullName = `${traveler?.first_name ?? ''} ${traveler?.last_name ?? ''}`.trim() || 'Без имени';
               const city = traveler?.city ?? '';
@@ -237,26 +274,60 @@ export default function RequestsPage() {
                         >
                           Профиль гостя
                         </Link>
-                        {request.conversation_id ? (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenChat(request.conversation_id)}
-                            className="inline-flex items-center justify-center rounded-full border border-[#003B32]/40 px-4 py-2 text-sm font-medium text-[#003B32] transition hover:border-[#003B32]/60 hover:bg-[#003B32]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#005C4B]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
-                          >
-                            Открыть чат
-                          </button>
-                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenChat(request)}
+                          className="inline-flex items-center justify-center rounded-full border border-[#003B32]/40 px-4 py-2 text-sm font-medium text-[#003B32] transition hover:border-[#003B32]/60 hover:bg-[#003B32]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#005C4B]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+                        >
+                          {request.conversation_id ? 'Открыть чат' : 'Создать чат'}
+                        </button>
                       </div>
                     </div>
                   </div>
                 </article>
               );
-            })}
+              })}
+            </div>
+          )}
+        </div>
+        <aside className="glass flex w-full max-w-full flex-col gap-3 rounded-3xl border border-white/15 bg-white/5 px-6 py-6 text-sm text-fg/80 lg:w-[360px]">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-fg">Чат по заявке</h2>
+            {chatLoading ? (
+              <span className="text-xs text-fg/60">создаём…</span>
+            ) : null}
           </div>
-        )}
+          {chatError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+              {chatError}
+            </div>
+          ) : null}
+          {activeConversationId ? (
+            <div className="h-[420px]">
+              <ChatWindow
+                conversationId={activeConversationId}
+                currentUserId={profile.id}
+              />
+            </div>
+          ) : (
+            <p className="text-xs text-fg/70">
+              Выберите заявку, чтобы открыть переписку с путешественником.
+            </p>
+          )}
+        </aside>
       </div>
     );
-  }, [error, handleOpenChat, isHost, loading, profile, requests]);
+  }, [
+    activeConversationId,
+    chatError,
+    chatLoading,
+    error,
+    handleOpenChat,
+    isHost,
+    loading,
+    profile,
+    requests
+  ]);
 
   return (
     <>

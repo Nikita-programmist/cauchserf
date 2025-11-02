@@ -1,6 +1,6 @@
 import Head from 'next/head';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navbar } from '../components/Navbar';
 import { Hero } from '../components/Hero';
 import { Button } from '../components/ui/button';
@@ -10,6 +10,7 @@ import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { TESTIMONIALS } from '../content/testimonials';
 import { useAuth } from '../components/AuthProvider';
+import ChatWindow from '../components/chat/ChatWindow';
 
 const journeys = [
   {
@@ -28,7 +29,47 @@ const journeys = [
 
 export default function Home() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [conversationId, setConversationId] = useState(null);
+  const [chatLoading, setChatLoading] = useState(false);
   const { user, loading: authLoading, hasSupabaseEnv } = useAuth();
+
+  useEffect(() => {
+    if (!user) {
+      setConversationId(null);
+      return;
+    }
+
+    let active = true;
+    setChatLoading(true);
+
+    (async () => {
+      try {
+        const res = await fetch('/api/conversations', {
+          credentials: 'include',
+        });
+        if (!res.ok) {
+          throw new Error('Failed to load conversations');
+        }
+        const data = await res.json();
+        if (!active) return;
+        const first = (Array.isArray(data) ? data : data?.conversations ?? [])
+          .find((item) => item?.conversationId);
+        setConversationId(first?.conversationId ?? null);
+      } catch (err) {
+        if (active) {
+          setConversationId(null);
+        }
+      } finally {
+        if (active) {
+          setChatLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   return (
     <>
@@ -55,19 +96,21 @@ export default function Home() {
               <div className="glass-strong rounded-3xl p-6 text-sm text-fg/80">
                 <p>Чат временно недоступен: настройте переменные окружения Supabase, чтобы активировать общение.</p>
               </div>
-            ) : authLoading ? (
+            ) : authLoading || chatLoading ? (
               <div className="glass-strong rounded-3xl p-6 text-sm text-fg/80">
                 <p>Загружаем информацию о ваших диалогах…</p>
               </div>
             ) : user ? (
-              <div className="glass-strong flex flex-col items-start gap-4 rounded-3xl p-6 text-sm text-fg/80 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-2">
-                  <p className="text-base font-medium text-fg">Ваши личные диалоги готовы.</p>
-                  <p>Открывайте чат, чтобы продолжить обсуждение путешествий и бронирований.</p>
-                </div>
-                <Button asChild variant="solid">
-                  <Link href="/chat">Открыть мои диалоги</Link>
-                </Button>
+              <div className="glass-strong flex flex-col gap-4 rounded-3xl p-6 text-sm text-fg/80">
+                {conversationId ? (
+                  <div className="h-[420px] w-full max-w-3xl">
+                    <ChatWindow conversationId={conversationId} currentUserId={user.id} />
+                  </div>
+                ) : (
+                  <div className="text-sm text-fg/70">
+                    Пока нет активных диалогов. Создайте заявку или отправьте сообщение, чтобы начать общение.
+                  </div>
+                )}
               </div>
             ) : (
               <div className="glass-strong flex flex-col gap-4 rounded-3xl p-6 text-sm text-fg/80 sm:flex-row sm:items-center sm:justify-between">
