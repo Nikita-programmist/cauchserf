@@ -107,7 +107,7 @@ export default function Home() {
               <div className="glass-strong flex flex-col gap-4 rounded-3xl p-6 text-sm text-fg/80">
                 {conversationId ? (
                   <div className="h-[420px] w-full max-w-3xl">
-                    <ChatWindow conversationId={conversationId} currentUserId={user.id} />
+                    <ChatWindow conversationId={conversationId} />
                   </div>
                 ) : (
                   <div className="text-sm text-fg/70">
