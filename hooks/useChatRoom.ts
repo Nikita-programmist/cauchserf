@@ -11,6 +11,8 @@ export type ChatMessage = {
   body: string;
   created_at: string;
   read_at: string | null;
+  edited_at: string | null;
+  deleted_at: string | null;
   sender: {
     id: string;
     display_name: string | null;
@@ -28,6 +30,9 @@ type PresenceState = Record<string, PresencePayload>;
 type UseChatRoomResult = {
   messages: ChatMessage[];
   sendMessage: (text: string) => Promise<void>;
+  editMessage: (messageId: string, body: string) => Promise<void>;
+  deleteMessage: (messageId: string) => Promise<void>;
+  isSending: boolean;
   isTypingMap: Record<string, boolean>;
   setTyping: (typing: boolean) => void;
   presenceState: PresenceState;
@@ -37,6 +42,7 @@ type UseChatRoomResult = {
 export function useChatRoom(roomId: string): UseChatRoomResult {
   const supabase = getSupabaseClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isSending, setIsSending] = useState(false);
   const [presenceState, setPresenceState] = useState<PresenceState>({});
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const profilesRef = useRef<Record<string, ChatMessage['sender']>>({});
@@ -82,7 +88,11 @@ export function useChatRoom(roomId: string): UseChatRoomResult {
         const payload = await response.json();
         if (abort) return;
 
-        const loadedMessages: ChatMessage[] = payload.messages ?? [];
+        const loadedMessages: ChatMessage[] = (payload.messages ?? []).map((message: ChatMessage) => ({
+          ...message,
+          edited_at: message.edited_at ?? null,
+          deleted_at: message.deleted_at ?? null,
+        }));
         setMessages(loadedMessages);
 
         const profileMap: Record<string, ChatMessage['sender']> = {};
@@ -126,7 +136,7 @@ export function useChatRoom(roomId: string): UseChatRoomResult {
               const { data, error } = await supabase
                 .from('chat_messages')
                 .select(
-                  `id, room_id, sender_id, body, created_at, read_at,
+                  `id, room_id, sender_id, body, created_at, read_at, edited_at, deleted_at,
                   sender:profiles!chat_messages_sender_id_fkey(id, display_name, avatar_url)`
                 )
                 .eq('id', newMessageId)
@@ -162,6 +172,7 @@ export function useChatRoom(roomId: string): UseChatRoomResult {
                 if (prev.some((msg) => msg.id === data.id)) {
                   return prev;
                 }
+
                 const nextMessage: ChatMessage = {
                   id: data.id,
                   room_id: data.room_id,
@@ -169,8 +180,11 @@ export function useChatRoom(roomId: string): UseChatRoomResult {
                   body: data.body,
                   created_at: data.created_at,
                   read_at: data.read_at,
+                  edited_at: data.edited_at ?? null,
+                  deleted_at: data.deleted_at ?? null,
                   sender: senderProfile,
                 };
+
                 return [...prev, nextMessage].sort((a, b) =>
                   new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
                 );
@@ -183,9 +197,11 @@ export function useChatRoom(roomId: string): UseChatRoomResult {
                 body: payload.new.body as string,
                 created_at: payload.new.created_at as string,
                 read_at: (payload.new.read_at as string | null) ?? null,
+                edited_at: (payload.new.edited_at as string | null) ?? null,
+                deleted_at: (payload.new.deleted_at as string | null) ?? null,
                 sender: senderProfile,
               };
-
+          
               setMessages((prev) => {
                 if (prev.some((msg) => msg.id === nextMessage.id)) {
                   return prev;
@@ -196,6 +212,48 @@ export function useChatRoom(roomId: string): UseChatRoomResult {
               });
             }
           })();
+        }
+      );
+
+    channel
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          const updatedId = payload.new.id as string;
+          const updatedBody = payload.new.body as string;
+          const editedAt = (payload.new.edited_at as string | null) ?? null;
+          const deletedAt = (payload.new.deleted_at as string | null) ?? null;
+          const readAt = (payload.new.read_at as string | null) ?? null;
+          const createdAt = (payload.new.created_at as string | null) ?? null;
+
+          setMessages((prev) => {
+            let changed = false;
+            const next = prev.map((msg) => {
+              if (msg.id !== updatedId) return msg;
+
+              changed = true;
+              return {
+                ...msg,
+                body: updatedBody,
+                edited_at: editedAt,
+                deleted_at: deletedAt,
+                read_at: readAt,
+                created_at: createdAt ?? msg.created_at,
+              };
+            });
+
+            if (!changed) {
+              return prev;
+            }
+
+            return next;
+          });
         }
       );
 
@@ -264,39 +322,97 @@ export function useChatRoom(roomId: string): UseChatRoomResult {
   const sendMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed) return;
+      if (!trimmed || isSending) return;
 
-      const response = await fetch('/api/chat/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ roomId, text: trimmed }),
+      setIsSending(true);
+
+      try {
+        const response = await fetch('/api/chat/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ roomId, text: trimmed }),
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || 'Failed to send message');
+        }
+
+        const payload = await response.json();
+        const message: ChatMessage | undefined = payload.message;
+
+        if (!message) return;
+
+        const normalized: ChatMessage = {
+          ...message,
+          edited_at: message.edited_at ?? null,
+          deleted_at: message.deleted_at ?? null,
+        };
+
+        if (normalized.sender) {
+          profilesRef.current[normalized.sender_id] = normalized.sender;
+        }
+
+        setMessages((prev) => {
+          if (prev.some((msg) => msg.id === normalized.id)) {
+            return prev;
+          }
+          return [...prev, normalized].sort((a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+        });
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [isSending, roomId]
+  );
+
+  const editMessage = useCallback(
+    async (messageId: string, body: string) => {
+      const trimmed = body.trim();
+      if (!trimmed || isSending) return;
+
+      setIsSending(true);
+      try {
+        const response = await fetch(`/api/chat/messages/${messageId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ body: trimmed }),
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || 'Failed to edit message');
+        }
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [isSending]
+  );
+
+  const deleteMessage = useCallback(async (messageId: string) => {
+    if (isSending) return;
+
+    setIsSending(true);
+    try {
+      const response = await fetch(`/api/chat/messages/${messageId}`, {
+        method: 'DELETE',
       });
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || 'Failed to send message');
+        throw new Error(payload.error || 'Failed to delete message');
       }
-
-      const payload = await response.json();
-      const message: ChatMessage | undefined = payload.message;
-
-      if (!message) return;
-
-      profilesRef.current[message.sender_id] = message.sender;
-
-      setMessages((prev) => {
-        if (prev.some((msg) => msg.id === message.id)) {
-          return prev;
-        }
-        return [...prev, message].sort((a, b) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        );
-      });
-    },
-    [roomId]
-  );
+    } finally {
+      setIsSending(false);
+    }
+  }, [isSending]);
 
   const setTyping = useCallback(
     (typing: boolean) => {
@@ -338,6 +454,9 @@ export function useChatRoom(roomId: string): UseChatRoomResult {
   return {
     messages,
     sendMessage,
+    editMessage,
+    deleteMessage,
+    isSending,
     isTypingMap,
     setTyping,
     presenceState,

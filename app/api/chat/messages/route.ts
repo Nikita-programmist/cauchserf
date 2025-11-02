@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabase
     .from('chat_messages')
     .select(
-      `id, room_id, sender_id, body, created_at, read_at,
+      `id, room_id, sender_id, body, created_at, read_at, edited_at, deleted_at,
       sender:profiles!chat_messages_sender_id_fkey(id, display_name, avatar_url)`
     )
     .eq('room_id', roomId)
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       body: text.trim(),
     })
     .select(
-      `id, room_id, sender_id, body, created_at, read_at,
+      `id, room_id, sender_id, body, created_at, read_at, edited_at, deleted_at,
       sender:profiles!chat_messages_sender_id_fkey(id, display_name, avatar_url)`
     )
     .single();
