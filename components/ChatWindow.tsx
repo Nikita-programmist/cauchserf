@@ -29,8 +29,5 @@ export default async function ChatWindow({ roomId, currentUserId }: ChatWindowPr
     );
   }
 
-  const currentUser = isTraveler ? room.traveler : room.host;
-  const otherUser = isTraveler ? room.host : room.traveler;
-
-  return <ChatRoomView roomId={roomId} currentUser={currentUser} otherUser={otherUser} />;
+  return <ChatRoomView conversationId={roomId} />;
 }

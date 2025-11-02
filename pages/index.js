@@ -52,9 +52,12 @@ export default function Home() {
         }
         const data = await res.json();
         if (!active) return;
-        const first = (Array.isArray(data) ? data : data?.conversations ?? [])
-          .find((item) => item?.conversationId);
-        setConversationId(first?.conversationId ?? null);
+        const firstConversation = data?.conversations?.[0]
+          ?? (Array.isArray(data) ? data[0] : null);
+        const resolvedId = firstConversation?.conversationId
+          ?? firstConversation?.id
+          ?? null;
+        setConversationId(resolvedId);
       } catch (err) {
         if (active) {
           setConversationId(null);

@@ -12,10 +12,10 @@ export async function GET() {
 
   try {
     const conversations = await listConversationsForUser(user.id);
-    return NextResponse.json(conversations, { status: 200 });
+    return NextResponse.json({ conversations }, { status: 200 });
   } catch (err) {
     console.error('GET /api/conversations error:', err);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json({ conversations: [] }, { status: 200 });
   }
 }
 
