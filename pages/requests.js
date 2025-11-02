@@ -132,20 +132,15 @@ export default function RequestsPage() {
     async (request) => {
       if (!request) return;
       setChatError('');
-
-      if (request.conversation_id) {
-        setActiveConversationId(request.conversation_id);
-        return;
-      }
-
       setChatLoading(true);
 
       try {
         const response = await fetch(`/api/stay-requests/${request.id}/ensure-conversation`, {
           method: 'POST',
+          credentials: 'include'
         });
 
-        const data = await response.json();
+        const data = await response.json().catch(() => null);
 
         if (!response.ok || !data?.conversationId) {
           throw new Error(data?.error ?? 'failed');

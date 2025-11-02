@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabaseServer';
 
-const DEFAULT_LIMIT = 50;
-
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const conversationId = searchParams.get('conversationId');
-  const limitParam = searchParams.get('limit');
-  const limit = limitParam ? Math.min(Number(limitParam) || DEFAULT_LIMIT, 200) : DEFAULT_LIMIT;
 
   if (!conversationId) {
     return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 });
@@ -20,8 +16,7 @@ export async function GET(req: NextRequest) {
     .select('id, conversation_id, sender_id, text, created_at, read_at, edited_at, deleted_at')
     .eq('conversation_id', conversationId)
     .is('deleted_at', null)
-    .order('created_at', { ascending: true })
-    .limit(limit);
+    .order('created_at', { ascending: true });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
