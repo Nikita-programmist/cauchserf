@@ -1,3 +1,4 @@
+// hooks/useChatRoom.ts
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -19,6 +20,7 @@ export function useChatRoom(roomId: string) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
 
+  // кто я
   useEffect(() => {
     const loadUser = async () => {
       const {
@@ -29,22 +31,24 @@ export function useChatRoom(roomId: string) {
     loadUser();
   }, [supabase]);
 
+  // загрузка + подписка
   useEffect(() => {
     if (!roomId) return;
 
-    const loadMessages = async () => {
+    const load = async () => {
       const { data } = await supabase
         .from('chat_messages')
         .select('id, room_id, sender_id, body, created_at, edited_at, deleted_at')
         .eq('room_id', roomId)
         .order('created_at', { ascending: true });
+
       setMessages(data ?? []);
     };
 
-    loadMessages();
+    load();
 
     const channel = supabase
-      .channel(`room:${roomId}`)
+      .channel(`chat-room-${roomId}`)
       .on(
         'postgres_changes',
         {
@@ -82,29 +86,26 @@ export function useChatRoom(roomId: string) {
     const body = text.trim();
     if (!body || !roomId || !currentUserId) return;
     setIsSending(true);
-    try {
-      await supabase.from('chat_messages').insert({
-        room_id: roomId,
-        sender_id: currentUserId,
-        body,
-      });
-    } finally {
-      setIsSending(false);
-    }
+    await supabase.from('chat_messages').insert({
+      room_id: roomId,
+      sender_id: currentUserId,
+      body,
+    });
+    setIsSending(false);
   };
 
-  const editMessage = async (messageId: string, body: string) => {
+  const editMessage = async (id: string, body: string) => {
     const text = body.trim();
     if (!text) return;
-    await fetch(`/api/chat/messages/${messageId}`, {
+    await fetch(`/api/chat/messages/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ body: text }),
     });
   };
 
-  const deleteMessage = async (messageId: string) => {
-    await fetch(`/api/chat/messages/${messageId}`, {
+  const deleteMessage = async (id: string) => {
+    await fetch(`/api/chat/messages/${id}`, {
       method: 'DELETE',
     });
   };
@@ -115,5 +116,7 @@ export function useChatRoom(roomId: string) {
     editMessage,
     deleteMessage,
     isSending,
+    currentUserId,
   };
 }
+
