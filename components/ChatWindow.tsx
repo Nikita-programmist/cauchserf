@@ -1,3 +1,4 @@
+// DEPRECATED: old chat component, use components/chat/ChatWindow.tsx instead
 import ChatRoomView from '@/app/chat/[roomId]/ChatRoomView';
 import { getChatRoomWithProfiles } from '@/lib/chatRooms';
 

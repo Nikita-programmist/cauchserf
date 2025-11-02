@@ -1,28 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabaseServer';
-import { getCurrentUserProfile } from '@/lib/chatRooms';
 
 const DEFAULT_LIMIT = 50;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const roomId = searchParams.get('roomId');
+  const conversationId = searchParams.get('conversationId');
   const limitParam = searchParams.get('limit');
   const limit = limitParam ? Math.min(Number(limitParam) || DEFAULT_LIMIT, 200) : DEFAULT_LIMIT;
 
-  if (!roomId) {
-    return NextResponse.json({ error: 'Missing roomId' }, { status: 400 });
+  if (!conversationId) {
+    return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 });
   }
 
   const supabase = getServerSupabase();
 
   const { data, error } = await supabase
-    .from('chat_messages')
-    .select(
-      `id, room_id, sender_id, body, created_at, read_at, edited_at, deleted_at,
-      sender:profiles!chat_messages_sender_id_fkey(id, display_name, avatar_url)`
-    )
-    .eq('room_id', roomId)
+    .from('messages')
+    .select('id, conversation_id, sender_id, text, created_at, read_at, edited_at, deleted_at')
+    .eq('conversation_id', conversationId)
+    .is('deleted_at', null)
     .order('created_at', { ascending: true })
     .limit(limit);
 
@@ -30,46 +27,65 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ messages: data ?? [] });
+  return NextResponse.json({
+    messages: (data ?? []).map((row) => ({
+      id: row.id,
+      content: row.text,
+      sender_id: row.sender_id,
+      created_at: row.created_at,
+      edited_at: row.edited_at ?? null,
+    })),
+  });
 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const roomId = body?.roomId as string | undefined;
-  const text = body?.text as string | undefined;
+  const conversationId = body?.conversationId as string | undefined;
+  const content = body?.content as string | undefined;
 
-  if (!roomId || typeof roomId !== 'string') {
-    return NextResponse.json({ error: 'roomId is required' }, { status: 400 });
+  if (!conversationId || typeof conversationId !== 'string') {
+    return NextResponse.json({ error: 'conversationId is required' }, { status: 400 });
   }
 
-  if (!text || typeof text !== 'string' || text.trim().length === 0) {
-    return NextResponse.json({ error: 'text is required' }, { status: 400 });
-  }
-
-  const profile = await getCurrentUserProfile();
-
-  if (!profile) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!content || typeof content !== 'string' || content.trim().length === 0) {
+    return NextResponse.json({ error: 'content is required' }, { status: 400 });
   }
 
   const supabase = getServerSupabase();
+  const clean = content.trim();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
 
   const { data: inserted, error: insertError } = await supabase
-    .from('chat_messages')
+    .from('messages')
     .insert({
-      room_id: roomId,
-      sender_id: profile.id,
-      body: text.trim(),
+      conversation_id: conversationId,
+      sender_id: user.id,
+      text: clean,
     })
-    .select(
-      `id, room_id, sender_id, body, created_at, read_at, edited_at, deleted_at,
-      sender:profiles!chat_messages_sender_id_fkey(id, display_name, avatar_url)`
-    )
+    .select('id, sender_id, text, created_at, read_at, edited_at')
     .single();
 
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ message: inserted });
+  if (!inserted) {
+    return NextResponse.json({ error: 'failed_to_insert' }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    message: {
+      id: inserted.id,
+      content: inserted.text,
+      sender_id: inserted.sender_id,
+      created_at: inserted.created_at,
+      edited_at: inserted.edited_at ?? null,
+    },
+  });
 }

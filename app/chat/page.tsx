@@ -1,15 +1,16 @@
 import { redirect } from 'next/navigation';
 import ChatPageClient from '@/components/ChatPageClient';
-import { getCurrentUserProfile, listUserChatRooms } from '@/lib/chatRooms';
+import { listConversationsForUser } from '@/lib/chatService';
+import { getCurrentUser } from '@/lib/supabaseServer';
 
 export default async function ChatIndexPage() {
-  const currentUser = await getCurrentUserProfile();
+  const currentUser = await getCurrentUser();
 
   if (!currentUser) {
     redirect('/login?redirect=/chat');
   }
 
-  const chatRooms = await listUserChatRooms(currentUser.id);
+  const conversations = await listConversationsForUser(currentUser.id);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 pb-12 pt-8">
@@ -24,7 +25,7 @@ export default async function ChatIndexPage() {
       <div className="glass-strong flex h-[70vh] flex-col rounded-3xl">
         <ChatPageClient
           currentUserId={currentUser.id}
-          initialItems={chatRooms}
+          initialItems={conversations}
           className="flex-1"
         />
       </div>

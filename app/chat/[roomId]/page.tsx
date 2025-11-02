@@ -1,44 +1,36 @@
-import { getCurrentUserProfile, listUserChatRooms } from '@/lib/chatRooms';
-import ChatRoomView from './[roomId]/ChatRoomView';
+import { redirect } from 'next/navigation';
+import ChatPageClient from '@/components/ChatPageClient';
+import { listConversationsForUser } from '@/lib/chatService';
+import { getCurrentUser } from '@/lib/supabaseServer';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ChatPage() {
-  const me = await getCurrentUserProfile();
-  if (!me) {
-    return <div className="p-6">Нужно войти.</div>;
+export default async function ChatPage({ params }: { params: { roomId: string } }) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    redirect('/login?redirect=/chat');
   }
 
-  const rooms = await listUserChatRooms(me.id);
-  const activeRoom = rooms[0] ?? null;
+  const conversations = await listConversationsForUser(currentUser.id);
 
   return (
-    <div className="p-6 flex gap-6 h-[calc(100vh-120px)]">
-      <div className="w-72 bg-white rounded-2xl border overflow-y-auto">
-        {rooms.map((r) => (
-          <div key={r.roomId} className="px-4 py-3 border-b">
-            <div className="font-medium">{r.otherUser.display_name ?? 'Без имени'}</div>
-            {r.lastMessageText && (
-              <div className="text-sm text-slate-500 truncate">
-                {r.lastMessageText}
-              </div>
-            )}
-            {r.unreadCount > 0 && (
-              <div className="text-xs text-emerald-600 mt-1">
-                {r.unreadCount} непрочитанных
-              </div>
-            )}
-          </div>
-        ))}
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 pb-12 pt-8">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-semibold text-fg">Мои диалоги</h1>
+          <p className="text-sm text-fg/70">
+            Общайтесь с путешественниками и хозяевами в реальном времени.
+          </p>
+        </div>
       </div>
-      <div className="flex-1 bg-white rounded-2xl border p-4">
-        {activeRoom ? (
-          <ChatRoomView roomId={activeRoom.roomId} />
-        ) : (
-          <div className="text-slate-400 mt-10">Выберите диалог</div>
-        )}
+      <div className="glass-strong flex h-[70vh] flex-col rounded-3xl">
+        <ChatPageClient
+          currentUserId={currentUser.id}
+          initialItems={conversations}
+          className="flex-1"
+          activeConversationId={params.roomId}
+        />
       </div>
     </div>
   );
 }
-

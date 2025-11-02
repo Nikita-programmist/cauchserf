@@ -12,7 +12,7 @@ export async function POST(
   }
 
   const body = await req.json();
-  const text = body?.text ?? '';
+  const text = body?.content ?? body?.text ?? '';
 
   try {
     const msg = await sendMessage(params.conversationId, user.id, text);
