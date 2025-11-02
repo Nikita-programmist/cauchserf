@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSupabase } from '@/lib/supabaseServer';
+import { getCurrentUser } from '@/lib/supabaseServer';
+import { getMessagesForConversation, sendMessage } from '@/lib/chatService';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -20,78 +21,76 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const supabase = getServerSupabase();
-
-  const { data, error } = await supabase
-    .from('messages')
-    .select('id, conversation_id, sender_id, text, created_at, read_at, edited_at, deleted_at')
-    .eq('conversation_id', conversationId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({
-    messages: (data ?? []).map((row) => ({
-      id: row.id,
-      content: row.text,
-      sender_id: row.sender_id,
-      created_at: row.created_at,
-      edited_at: row.edited_at ?? null,
-    })),
-  });
-}
-
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const conversationId = body?.conversationId as string | undefined;
-  const content = body?.content as string | undefined;
-
-  if (!conversationId || typeof conversationId !== 'string') {
-    return NextResponse.json({ error: 'conversationId is required' }, { status: 400 });
-  }
-
-  if (!content || typeof content !== 'string' || content.trim().length === 0) {
-    return NextResponse.json({ error: 'content is required' }, { status: 400 });
-  }
-
-  const supabase = getServerSupabase();
-  const clean = content.trim();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const { data: inserted, error: insertError } = await supabase
-    .from('messages')
-    .insert({
-      conversation_id: conversationId,
-      sender_id: user.id,
-      text: clean,
-    })
-    .select('id, sender_id, text, created_at, read_at, edited_at')
-    .single();
+  try {
+    const messages = await getMessagesForConversation(
+      conversationId,
+      user.id
+    );
 
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
+    return NextResponse.json({ messages });
+  } catch (err: any) {
+    if (err?.message === 'forbidden') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+
+    return NextResponse.json({ error: 'server_error' }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({}));
+  const rawConversationId =
+    (typeof body?.conversationId === 'string' && body.conversationId) ||
+    (typeof body?.roomId === 'string' && body.roomId) ||
+    '';
+
+  const conversationId = rawConversationId.trim();
+
+  if (!conversationId) {
+    return NextResponse.json(
+      { error: 'conversationId is required' },
+      { status: 400 }
+    );
   }
 
-  if (!inserted) {
-    return NextResponse.json({ error: 'failed_to_insert' }, { status: 500 });
+  const rawContent =
+    (typeof body?.content === 'string' && body.content) ||
+    (typeof body?.text === 'string' && body.text) ||
+    '';
+
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  return NextResponse.json({
-    message: {
-      id: inserted.id,
-      content: inserted.text,
-      sender_id: inserted.sender_id,
-      created_at: inserted.created_at,
-      edited_at: inserted.edited_at ?? null,
-    },
-  });
+  try {
+    const inserted = await sendMessage(conversationId, user.id, rawContent);
+
+    return NextResponse.json({
+      message: {
+        id: inserted.id,
+        content: inserted.text,
+        sender_id: inserted.senderId,
+        created_at: inserted.createdAt,
+        edited_at: inserted.editedAt ?? null,
+      },
+    });
+  } catch (err: any) {
+    if (err?.message === 'forbidden') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+
+    if (err?.message === 'empty') {
+      return NextResponse.json({ error: 'content is required' }, { status: 400 });
+    }
+
+    return NextResponse.json({ error: 'server_error' }, { status: 500 });
+  }
 }
