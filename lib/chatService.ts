@@ -123,7 +123,7 @@ async function getConversationRowForUser(
   conversationId: string,
   userId: string
 ) {
-  const supabase = getServerSupabase();
+  const supabase = getServiceSupabase();
 
   const { data: convo, error } = await supabase
     .from('conversations')
@@ -360,9 +360,9 @@ export async function sendMessage(
     throw new Error('forbidden');
   }
 
-  const supabase = getServerSupabase();
+  const supabase = getServiceSupabase();
 
-  // вставляем сообщение (через юзер-клиент => RLS "insert_messages_if_participant")
+  // вставляем сообщение (через сервисный клиент с ручной проверкой доступа)
   const { data, error } = await supabase
     .from('messages')
     .insert({
@@ -370,7 +370,7 @@ export async function sendMessage(
       sender_id: userId,
       text: clean,
     })
-    .select('id, sender_id, text, created_at, read_at')
+    .select('id, sender_id, text, created_at, read_at, edited_at')
     .single();
 
   if (error) throw error;
@@ -381,7 +381,41 @@ export async function sendMessage(
     text: data.text,
     createdAt: data.created_at,
     readAt: data.read_at,
+    editedAt: data.edited_at ?? null,
   };
+}
+
+export async function getMessagesForConversation(
+  conversationId: string,
+  userId: string
+) {
+  const convRow = await getConversationRowForUser(conversationId, userId);
+  if (!convRow) {
+    throw new Error('forbidden');
+  }
+
+  const supabase = getServiceSupabase();
+
+  const { data, error } = await supabase
+    .from('messages')
+    .select(
+      'id, conversation_id, sender_id, text, created_at, read_at, edited_at, deleted_at'
+    )
+    .eq('conversation_id', conversationId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    content: row.text as string,
+    sender_id: row.sender_id as string,
+    created_at: row.created_at as string,
+    edited_at: (row.edited_at as string | null) ?? null,
+  }));
 }
 
 // пометить все входящие как прочитанные (read_at)

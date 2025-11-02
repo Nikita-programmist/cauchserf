@@ -1,17 +1,30 @@
 import { NextResponse } from 'next/server';
-import { getServerSupabase } from '@/lib/supabaseServer';
+import { getCurrentUser, getServiceSupabase } from '@/lib/supabaseServer';
 
 export async function PATCH(
   req: Request,
   { params }: { params: { messageId: string } }
 ) {
-  const supabase = getServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  const supabase = getServiceSupabase();
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('messages')
+    .select('id, sender_id')
+    .eq('id', params.messageId)
+    .maybeSingle();
+
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  }
+
+  if (!existing || existing.sender_id !== user.id) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
   const body = await req.json();
@@ -25,12 +38,11 @@ export async function PATCH(
     .from('messages')
     .update({ text: content, edited_at: new Date().toISOString() })
     .eq('id', params.messageId)
-    .eq('sender_id', user.id)
     .select('id, sender_id, text, created_at, edited_at')
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   return NextResponse.json({
@@ -48,23 +60,35 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { messageId: string } }
 ) {
-  const supabase = getServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
+  const supabase = getServiceSupabase();
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('messages')
+    .select('id, sender_id')
+    .eq('id', params.messageId)
+    .maybeSingle();
+
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  }
+
+  if (!existing || existing.sender_id !== user.id) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
   const { error } = await supabase
     .from('messages')
     .delete()
-    .eq('id', params.messageId)
-    .eq('sender_id', user.id);
+    .eq('id', params.messageId);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });
