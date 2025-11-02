@@ -1,17 +1,44 @@
-// app/chat/[roomId]/page.tsx
-import { redirect } from 'next/navigation';
-import ChatWindow from '@/components/ChatWindow';
-import { getCurrentUserProfile } from '@/lib/chatRooms';
+import { getCurrentUserProfile, listUserChatRooms } from '@/lib/chatRooms';
+import ChatRoomView from './[roomId]/ChatRoomView';
 
-export default async function ChatRoomPage({ params }: { params: { roomId: string } }) {
-  const currentUser = await getCurrentUserProfile();
-  if (!currentUser) {
-    redirect(`/login?redirect=/chat/${params.roomId}`);
+export const dynamic = 'force-dynamic';
+
+export default async function ChatPage() {
+  const me = await getCurrentUserProfile();
+  if (!me) {
+    return <div className="p-6">Нужно войти.</div>;
   }
 
+  const rooms = await listUserChatRooms(me.id);
+  const activeRoom = rooms[0] ?? null;
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
-      <ChatWindow roomId={params.roomId} currentUserId={currentUser.id} />
+    <div className="p-6 flex gap-6 h-[calc(100vh-120px)]">
+      <div className="w-72 bg-white rounded-2xl border overflow-y-auto">
+        {rooms.map((r) => (
+          <div key={r.roomId} className="px-4 py-3 border-b">
+            <div className="font-medium">{r.otherUser.display_name ?? 'Без имени'}</div>
+            {r.lastMessageText && (
+              <div className="text-sm text-slate-500 truncate">
+                {r.lastMessageText}
+              </div>
+            )}
+            {r.unreadCount > 0 && (
+              <div className="text-xs text-emerald-600 mt-1">
+                {r.unreadCount} непрочитанных
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="flex-1 bg-white rounded-2xl border p-4">
+        {activeRoom ? (
+          <ChatRoomView roomId={activeRoom.roomId} />
+        ) : (
+          <div className="text-slate-400 mt-10">Выберите диалог</div>
+        )}
+      </div>
     </div>
   );
 }
+
