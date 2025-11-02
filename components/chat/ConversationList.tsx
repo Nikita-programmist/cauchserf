@@ -1,11 +1,8 @@
-'use client';
-
+import Link from 'next/link';
 import type { ChatRoomListItem } from '@/lib/chatRooms';
-import { useMemo } from 'react';
 
 type ConversationListProps = {
   items: ChatRoomListItem[];
-  onSelect: (roomId: string) => void;
   selectedConversationId: string | null;
 };
 
@@ -23,18 +20,8 @@ function getInitials(name: string | null) {
 
 export default function ConversationList({
   items,
-  onSelect,
   selectedConversationId,
 }: ConversationListProps) {
-  const formatter = useMemo(
-    () =>
-      new Intl.DateTimeFormat(undefined, {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-    []
-  );
-
   if (items.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center px-6 text-sm text-neutral-500">
@@ -42,6 +29,11 @@ export default function ConversationList({
       </div>
     );
   }
+
+  const formatter = new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
   return (
     <div className="flex w-80 flex-col overflow-y-auto border-r border-white/10 bg-white/30">
@@ -52,9 +44,9 @@ export default function ConversationList({
           : null;
 
         return (
-          <button
+          <Link
             key={item.roomId}
-            onClick={() => onSelect(item.roomId)}
+            href={`/chat/${item.roomId}`}
             className={`flex w-full gap-4 px-5 py-4 text-left transition ${
               isActive
                 ? 'bg-blue-50/90 text-neutral-900 shadow-inner'
@@ -93,7 +85,7 @@ export default function ConversationList({
                 </span>
               ) : null}
             </div>
-          </button>
+          </Link>
         );
       })}
     </div>

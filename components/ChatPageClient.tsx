@@ -1,6 +1,3 @@
-'use client';
-
-import { useEffect, useMemo, useState } from 'react';
 import ChatWindow from '@/components/ChatWindow';
 import ConversationList from '@/components/chat/ConversationList';
 import type { ChatRoomListItem } from '@/lib/chatRooms';
@@ -10,34 +7,16 @@ type ChatPageClientProps = {
   currentUserId: string;
   initialItems: ChatRoomListItem[];
   className?: string;
+  activeRoomId?: string | null;
 };
 
 export default function ChatPageClient({
   currentUserId,
   initialItems,
   className,
+  activeRoomId,
 }: ChatPageClientProps) {
-  const [activeRoomId, setActiveRoomId] = useState<string | null>(
-    initialItems[0]?.roomId ?? null
-  );
-
-  const items = useMemo(() => initialItems, [initialItems]);
-
-  useEffect(() => {
-    if (!activeRoomId && items.length > 0) {
-      setActiveRoomId(items[0]?.roomId ?? null);
-    }
-  }, [activeRoomId, items]);
-
-  useEffect(() => {
-    if (!activeRoomId) {
-      return;
-    }
-    const stillExists = items.some((item) => item.roomId === activeRoomId);
-    if (!stillExists) {
-      setActiveRoomId(items[0]?.roomId ?? null);
-    }
-  }, [activeRoomId, items]);
+  const selectedRoomId = activeRoomId ?? initialItems[0]?.roomId ?? null;
 
   return (
     <div
@@ -46,14 +25,10 @@ export default function ChatPageClient({
         className
       )}
     >
-      <ConversationList
-        items={items}
-        onSelect={setActiveRoomId}
-        selectedConversationId={activeRoomId}
-      />
+      <ConversationList items={initialItems} selectedConversationId={selectedRoomId} />
       <div className="flex flex-1 flex-col">
-        {activeRoomId ? (
-          <ChatWindow roomId={activeRoomId} currentUserId={currentUserId} />
+        {selectedRoomId ? (
+          <ChatWindow roomId={selectedRoomId} currentUserId={currentUserId} />
         ) : (
           <div className="flex flex-1 items-center justify-center bg-white/60 text-sm text-neutral-500">
             Выберите чат, чтобы начать переписку

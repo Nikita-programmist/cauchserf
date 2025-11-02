@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import { useChatRoom } from '@/hooks/useChatRoom';
 import type { ProfileSummary } from '@/lib/chatRooms';
 
@@ -10,12 +11,20 @@ type ChatRoomViewProps = {
   otherUser: ProfileSummary;
 };
 
-export default function ChatRoomView({ roomId, currentUser, otherUser }: ChatRoomViewProps) {
-  const { messages, sendMessage, editMessage, deleteMessage, isSending } = useChatRoom(roomId);
+type MessageMenuState = string | null;
+
+export default function ChatRoomView({
+  roomId,
+  currentUser,
+  otherUser,
+}: ChatRoomViewProps) {
+  const { messages, sendMessage, editMessage, deleteMessage, isSending } =
+    useChatRoom(roomId);
   const [draft, setDraft] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [menuMessageId, setMenuMessageId] = useState<string | null>(null);
+  const [menuState, setMenuState] = useState<MessageMenuState>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const myUserId = currentUser.id;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -23,14 +32,16 @@ export default function ChatRoomView({ roomId, currentUser, otherUser }: ChatRoo
 
   useEffect(() => {
     if (!editingMessageId) return;
-    const current = messages.find((msg) => msg.id === editingMessageId);
-    if (!current || current.deleted_at) {
+    const currentMessage = messages.find((msg) => msg.id === editingMessageId);
+    if (!currentMessage || currentMessage.deleted_at) {
       setEditingMessageId(null);
       setDraft('');
+      return;
     }
+    setDraft(currentMessage.body);
   }, [editingMessageId, messages]);
 
-  async function handleSend() {
+  const handleSend = async () => {
     const text = draft.trim();
     if (!text) return;
 
@@ -38,42 +49,49 @@ export default function ChatRoomView({ roomId, currentUser, otherUser }: ChatRoo
       if (editingMessageId) {
         await editMessage(editingMessageId, text);
         setEditingMessageId(null);
-        setDraft('');
       } else {
         await sendMessage(text);
-        setDraft('');
       }
+      setDraft('');
     } catch (error) {
-      console.error(error);
+      console.error('Failed to send message', error);
     }
-  }
+  };
 
-  function handleCancelEdit() {
+  const handleCancelEdit = () => {
     setEditingMessageId(null);
     setDraft('');
-  }
+  };
 
-  async function handleDelete(messageId: string) {
+  const handleDelete = async (messageId: string) => {
     try {
       await deleteMessage(messageId);
       if (editingMessageId === messageId) {
         handleCancelEdit();
       }
     } catch (error) {
-      console.error(error);
+      console.error('Failed to delete message', error);
     } finally {
-      setMenuMessageId(null);
+      setMenuState(null);
     }
-  }
+  };
 
-  function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
+  const handleStartEdit = (messageId: string) => {
+    const msg = messages.find((m) => m.id === messageId);
+    if (!msg || msg.deleted_at) return;
+    setEditingMessageId(messageId);
+    setDraft(msg.body);
+    setMenuState(null);
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
       void handleSend();
     }
-  }
+  };
 
-  function Avatar({ profile }: { profile: ProfileSummary }) {
+  const Avatar = ({ profile }: { profile: ProfileSummary }) => {
     const initials = (profile.display_name || '?')
       .trim()
       .split(/\s+/)
@@ -95,11 +113,10 @@ export default function ChatRoomView({ roomId, currentUser, otherUser }: ChatRoo
         )}
       </div>
     );
-  }
+  };
 
   return (
     <div className="flex h-full min-h-[60vh] flex-col gap-4 bg-transparent p-4">
-      {/* header */}
       <header className="flex items-start gap-3 rounded-2xl border border-white/15 bg-white/70 px-4 py-3 shadow-inner backdrop-blur">
         <Avatar profile={otherUser} />
         <div className="flex flex-col">
@@ -110,7 +127,6 @@ export default function ChatRoomView({ roomId, currentUser, otherUser }: ChatRoo
         </div>
       </header>
 
-      {/* messages */}
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto rounded-2xl border border-white/15 bg-white/80 p-4 shadow-inner">
         {messages.length === 0 ? (
           <div className="flex flex-1 items-center justify-center text-center text-sm text-neutral-400">
@@ -118,7 +134,7 @@ export default function ChatRoomView({ roomId, currentUser, otherUser }: ChatRoo
           </div>
         ) : (
           messages.map((m) => {
-            const mine = m.sender_id === currentUser.id;
+            const mine = m.sender_id === myUserId;
             const isDeleted = Boolean(m.deleted_at);
 
             if (isDeleted) {
@@ -142,20 +158,18 @@ export default function ChatRoomView({ roomId, currentUser, otherUser }: ChatRoo
                     <div className="absolute -top-2 -right-2 flex flex-col items-end gap-1">
                       <button
                         type="button"
-                        onClick={() => setMenuMessageId((prev) => (prev === m.id ? null : m.id))}
+                        onClick={() =>
+                          setMenuState((prev) => (prev === m.id ? null : m.id))
+                        }
                         className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] text-neutral-700 shadow transition hover:bg-white"
                       >
                         ⋯
                       </button>
-                      {menuMessageId === m.id ? (
+                      {menuState === m.id ? (
                         <div className="w-28 rounded-lg border border-neutral-200 bg-white py-1 text-left text-[11px] text-neutral-700 shadow-lg">
                           <button
                             type="button"
-                            onClick={() => {
-                              setEditingMessageId(m.id);
-                              setDraft(m.body);
-                              setMenuMessageId(null);
-                            }}
+                            onClick={() => handleStartEdit(m.id)}
                             className="flex w-full items-center px-3 py-1.5 text-left hover:bg-neutral-100"
                           >
                             Редактировать
@@ -192,7 +206,6 @@ export default function ChatRoomView({ roomId, currentUser, otherUser }: ChatRoo
         <div ref={bottomRef} />
       </div>
 
-      {/* input */}
       <div className="flex flex-col gap-3 rounded-2xl border border-white/15 bg-white/70 px-4 py-3 shadow-inner backdrop-blur">
         {editingMessageId ? (
           <div className="flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
@@ -211,7 +224,7 @@ export default function ChatRoomView({ roomId, currentUser, otherUser }: ChatRoo
           rows={1}
           placeholder={editingMessageId ? 'Измените сообщение…' : 'Напишите сообщение…'}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(event) => setDraft(event.target.value)}
           onKeyDown={onKeyDown}
         />
         <div className="flex justify-end gap-2">
