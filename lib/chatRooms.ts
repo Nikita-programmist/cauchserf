@@ -61,8 +61,7 @@ export async function getCurrentUserProfile() {
 }
 
 /**
- * Гарантирует, что между currentUser и otherUser есть ROOM.
- * Если нашлась — вернуть её, если нет — создать.
+ * ВАЖНО: нужен для /app/api/chat/room/route.ts
  */
 export async function ensureChatRoom(
   currentUserId: string,
@@ -197,3 +196,4 @@ export async function listUserChatRooms(userId: string): Promise<ChatRoomListIte
 
   return results;
 }
+
