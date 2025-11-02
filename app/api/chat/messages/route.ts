@@ -3,10 +3,21 @@ import { getServerSupabase } from '@/lib/supabaseServer';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
+
+  if (searchParams.has('roomId')) {
+    return NextResponse.json(
+      { error: 'roomId parameter is not supported' },
+      { status: 400 }
+    );
+  }
+
   const conversationId = searchParams.get('conversationId');
 
-  if (!conversationId) {
-    return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 });
+  if (!conversationId || conversationId.trim().length === 0) {
+    return NextResponse.json(
+      { error: 'Missing conversationId' },
+      { status: 400 }
+    );
   }
 
   const supabase = getServerSupabase();

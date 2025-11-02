@@ -34,6 +34,7 @@ export default function RequestsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeConversationId, setActiveConversationId] = useState(null);
+  const [activeParticipant, setActiveParticipant] = useState(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState('');
 
@@ -133,6 +134,7 @@ export default function RequestsPage() {
       if (!request) return;
       setChatError('');
       setChatLoading(true);
+      setActiveParticipant(null);
 
       try {
         const response = await fetch(`/api/stay-requests/${request.id}/ensure-conversation`, {
@@ -145,8 +147,8 @@ export default function RequestsPage() {
         if (!response.ok || !data?.conversationId) {
           throw new Error(data?.error ?? 'failed');
         }
-
         setActiveConversationId(data.conversationId);
+        setActiveParticipant(data.participant ?? null);
         setRequests((prev) =>
           prev.map((item) =>
             item.id === request.id
@@ -156,6 +158,7 @@ export default function RequestsPage() {
         );
       } catch (err) {
         setChatError('Не удалось открыть чат. Попробуйте позже.');
+        setActiveParticipant(null);
       } finally {
         setChatLoading(false);
       }
@@ -206,22 +209,22 @@ export default function RequestsPage() {
           ) : (
             <div className="flex flex-col gap-6">
               {requests.map((request) => {
-              const traveler = request.traveler;
-              const fullName = `${traveler?.first_name ?? ''} ${traveler?.last_name ?? ''}`.trim() || 'Без имени';
-              const city = traveler?.city ?? '';
-              const age = traveler?.age != null ? String(traveler.age) : '';
-              const gender = traveler?.gender ? genderLabels[traveler.gender] ?? traveler.gender : '';
-              const details = [city, age, gender].filter(Boolean).join(' • ');
-              const bio = traveler?.bio?.trim() || 'Гость пока не рассказал о себе.';
-              const travelerRoleLabel = traveler?.role ? roleLabels[traveler.role] ?? traveler.role : null;
-              const datesText = `${formatDate(request.start_date)} → ${formatDate(request.end_date)}`;
-              const messageText = request.message?.trim() || 'Гость не оставил сообщение.';
+                const traveler = request.traveler;
+                const fullName = `${traveler?.first_name ?? ''} ${traveler?.last_name ?? ''}`.trim() || 'Без имени';
+                const city = traveler?.city ?? '';
+                const age = traveler?.age != null ? String(traveler.age) : '';
+                const gender = traveler?.gender ? genderLabels[traveler.gender] ?? traveler.gender : '';
+                const details = [city, age, gender].filter(Boolean).join(' • ');
+                const bio = traveler?.bio?.trim() || 'Гость пока не рассказал о себе.';
+                const travelerRoleLabel = traveler?.role ? roleLabels[traveler.role] ?? traveler.role : null;
+                const datesText = `${formatDate(request.start_date)} → ${formatDate(request.end_date)}`;
+                const messageText = request.message?.trim() || 'Гость не оставил сообщение.';
 
-              return (
-                <article
-                  key={request.id}
-                  className="rounded-3xl border border-white/15 bg-white/5 px-6 py-6 shadow-lg shadow-slate-900/5"
-                >
+                return (
+                  <article
+                    key={request.id}
+                    className="rounded-3xl border border-white/15 bg-white/5 px-6 py-6 shadow-lg shadow-slate-900/5"
+                  >
                   <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
                     <div className="flex-shrink-0">
                       <div className="h-20 w-20 overflow-hidden rounded-2xl border border-white/20 bg-white/5">
@@ -280,7 +283,7 @@ export default function RequestsPage() {
                     </div>
                   </div>
                 </article>
-              );
+                );
               })}
             </div>
           )}
@@ -301,7 +304,7 @@ export default function RequestsPage() {
             <div className="h-[420px]">
               <ChatWindow
                 conversationId={activeConversationId}
-                currentUserId={profile.id}
+                participant={activeParticipant}
               />
             </div>
           ) : (
@@ -314,6 +317,7 @@ export default function RequestsPage() {
     );
   }, [
     activeConversationId,
+    activeParticipant,
     chatError,
     chatLoading,
     error,

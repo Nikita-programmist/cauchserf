@@ -1,7 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { useRealtimeConversation } from "@/hooks/useRealtimeConversation";
+import { useAuth } from "@/components/AuthProvider";
 
 type Message = {
   id: string;
@@ -73,19 +80,29 @@ function removeMessage(list: Message[], id: string) {
   return list.filter((item) => item.id !== id);
 }
 
+type Participant = {
+  id: string;
+  name?: string | null;
+  avatar_url?: string | null;
+};
+
 export type ChatWindowProps = {
-  conversationId: string;
-  currentUserId: string;
+  conversationId?: string | null;
+  participant?: Participant | null;
   header?: ReactNode;
 };
 
 export default function ChatWindow({
   conversationId,
-  currentUserId,
+  participant,
   header,
 }: ChatWindowProps) {
+  const { user } = useAuth();
+  const currentUserId = user?.id ?? null;
+  const resolvedConversationId = conversationId ?? null;
+
   const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(resolvedConversationId));
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [text, setText] = useState("");
@@ -119,9 +136,19 @@ export default function ChatWindow({
   }, []);
 
   useEffect(() => {
+    if (!resolvedConversationId) {
+      setMessages([]);
+      setLoading(false);
+      setError(null);
+      setSubmitError(null);
+      setEditingId(null);
+      setText("");
+      setPending(false);
+      return;
+    }
+
     let active = true;
 
-    setMessages([]);
     setLoading(true);
     setError(null);
     setSubmitError(null);
@@ -131,7 +158,7 @@ export default function ChatWindow({
 
     (async () => {
       try {
-        const normalized = await fetchMessages(conversationId);
+        const normalized = await fetchMessages(resolvedConversationId);
         if (!active) return;
         setMessages(normalized);
         setError(null);
@@ -149,48 +176,82 @@ export default function ChatWindow({
     return () => {
       active = false;
     };
-  }, [conversationId, fetchMessages]);
+  }, [resolvedConversationId, fetchMessages]);
 
   useEffect(() => {
-    fetch(`/api/conversations/${conversationId}/read`, {
+    if (!resolvedConversationId) {
+      return;
+    }
+
+    fetch(`/api/conversations/${resolvedConversationId}/read`, {
       method: "POST",
       credentials: "include",
     }).catch(() => undefined);
-  }, [conversationId]);
+  }, [resolvedConversationId]);
 
-  const handleRealtimeInsert = useCallback((payload: any) => {
-    if (payload?.deleted_at) {
-      setMessages((prev) => removeMessage(prev, payload.id));
-      return;
-    }
+  const handleRealtimeInsert = useCallback(
+    (payload: any) => {
+      if (!resolvedConversationId) {
+        return;
+      }
 
-    const message = normalizeMessage(payload);
-    if (message) {
-      setMessages((prev) => upsertMessage(prev, message));
-    }
-  }, []);
+      if (payload?.deleted_at) {
+        setMessages((prev) => removeMessage(prev, payload.id));
+        return;
+      }
 
-  const handleRealtimeUpdate = useCallback((payload: any) => {
-    if (payload?.deleted_at) {
-      setMessages((prev) => removeMessage(prev, payload.id));
-      return;
-    }
+      if (
+        payload?.conversation_id &&
+        payload.conversation_id !== resolvedConversationId
+      ) {
+        return;
+      }
 
-    const message = normalizeMessage(payload);
-    if (message) {
-      setMessages((prev) => upsertMessage(prev, message));
-    }
-  }, []);
+      const message = normalizeMessage(payload);
+      if (message) {
+        setMessages((prev) => upsertMessage(prev, message));
+      }
+    },
+    [resolvedConversationId]
+  );
+
+  const handleRealtimeUpdate = useCallback(
+    (payload: any) => {
+      if (!resolvedConversationId) {
+        return;
+      }
+
+      if (payload?.deleted_at) {
+        setMessages((prev) => removeMessage(prev, payload.id));
+        return;
+      }
+
+      if (
+        payload?.conversation_id &&
+        payload.conversation_id !== resolvedConversationId
+      ) {
+        return;
+      }
+
+      const message = normalizeMessage(payload);
+      if (message) {
+        setMessages((prev) => upsertMessage(prev, message));
+      }
+    },
+    [resolvedConversationId]
+  );
+
+  const realtimeConversationId = resolvedConversationId ?? "__none__";
 
   useRealtimeConversation(
-    conversationId,
+    realtimeConversationId,
     handleRealtimeInsert,
     handleRealtimeUpdate
   );
 
   const handleSend = async () => {
     const value = text.trim();
-    if (!value || pending) return;
+    if (!value || pending || !resolvedConversationId) return;
 
     setPending(true);
     setSubmitError(null);
@@ -221,7 +282,7 @@ export default function ChatWindow({
         setText("");
       } else {
         const res = await fetch(
-          `/api/conversations/${conversationId}/send`,
+          `/api/conversations/${resolvedConversationId}/send`,
           {
             method: "POST",
             headers: {
@@ -276,57 +337,124 @@ export default function ChatWindow({
     }
   };
 
+  const headerContent = useMemo(() => {
+    if (header) {
+      return header;
+    }
+
+    if (!participant) {
+      return null;
+    }
+
+    const participantName =
+      typeof participant.name === "string" && participant.name.trim().length > 0
+        ? participant.name.trim()
+        : "Собеседник";
+    const initials = participantName.charAt(0).toUpperCase();
+
+    return (
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 overflow-hidden rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
+          {participant.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={participant.avatar_url}
+              alt={participantName}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              {initials || "🙂"}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold text-slate-900">
+            {participantName}
+          </span>
+          <span className="text-xs text-slate-500">Личные сообщения</span>
+        </div>
+      </div>
+    );
+  }, [header, participant]);
+
+  if (!resolvedConversationId) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white/50 p-6 text-center text-sm text-slate-500">
+        Выберите заявку
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full flex-col">
-      {header ? (
-        <div className="border-b bg-white p-3">{header}</div>
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+      {headerContent ? (
+        <div className="border-b border-slate-100 bg-slate-50/80 p-4">
+          {headerContent}
+        </div>
       ) : null}
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+      <div className="flex-1 space-y-2 overflow-y-auto bg-white p-4">
         {loading ? (
-          <p className="text-sm text-gray-400">Загружаю...</p>
+          <p className="text-sm text-slate-400">Загружаем сообщения…</p>
         ) : error ? (
           <p className="text-sm text-red-500">{error}</p>
         ) : messages.length === 0 ? (
-          <p className="text-sm text-gray-400">Пока нет сообщений</p>
+          <p className="text-sm text-slate-400">Пока нет сообщений</p>
         ) : (
-          messages.map((m) => (
-            <div
-              key={m.id}
-              className={`flex ${
-                m.sender_id === currentUserId ? "justify-end" : "justify-start"
-              }`}
-            >
-              <div className="relative max-w-[75%] rounded-lg bg-gray-100 px-3 py-2 text-sm">
-                <p className="whitespace-pre-wrap break-words">{m.content}</p>
-                {m.edited_at ? (
-                  <span className="ml-2 text-[10px] text-gray-400">изменено</span>
-                ) : null}
-                {m.sender_id === currentUserId ? (
-                  <div className="absolute -right-6 top-1 flex flex-col gap-1">
-                    <button
-                      onClick={() => {
-                        setEditingId(m.id);
-                        setText(m.content);
-                        setSubmitError(null);
-                      }}
-                      className="text-[10px] text-blue-500"
+          messages.map((m) => {
+            const isOwn = currentUserId && m.sender_id === currentUserId;
+
+            return (
+              <div
+                key={m.id}
+                className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`relative max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                    isOwn
+                      ? "bg-emerald-600 text-white"
+                      : "bg-slate-100 text-slate-900"
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                  {m.edited_at ? (
+                    <span
+                      className={`mt-1 block text-[10px] ${
+                        isOwn ? "text-white/70" : "text-slate-500"
+                      }`}
                     >
-                      изм
-                    </button>
-                    <button
-                      onClick={() => handleDelete(m.id)}
-                      className="text-[10px] text-red-500"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ) : null}
+                      изменено
+                    </span>
+                  ) : null}
+                  {isOwn ? (
+                    <div className="absolute -right-6 top-1 flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingId(m.id);
+                          setText(m.content);
+                          setSubmitError(null);
+                        }}
+                        className="text-[10px] text-emerald-600"
+                      >
+                        изм
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(m.id)}
+                        className="text-[10px] text-red-500"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
-      <div className="flex flex-col gap-2 border-t p-3">
+      <div className="flex flex-col gap-2 border-t border-slate-100 bg-white p-4">
         {submitError ? (
           <p className="text-xs text-red-500">{submitError}</p>
         ) : null}
@@ -340,15 +468,18 @@ export default function ChatWindow({
                 handleSend();
               }
             }}
-            placeholder={editingId ? "Редактируешь..." : "Написать сообщение"}
-            className="flex-1 rounded border px-2 py-1 text-sm"
+            placeholder={
+              editingId ? "Редактируете сообщение…" : "Написать сообщение"
+            }
+            className="flex-1 rounded-full border border-slate-200 px-4 py-2 text-sm focus:border-emerald-500 focus:outline-none"
           />
           <button
+            type="button"
             onClick={handleSend}
             disabled={pending}
-            className="rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-60"
+            className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-60"
           >
-            {editingId ? "Сохранить" : "Отпр."}
+            {editingId ? "Сохранить" : "Отправить"}
           </button>
         </div>
       </div>
