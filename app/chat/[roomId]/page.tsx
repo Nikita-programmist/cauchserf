@@ -5,13 +5,18 @@ import { getCurrentUser } from '@/lib/supabaseServer';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ChatPage({ params }: { params: { roomId: string } }) {
+export default async function ChatPage({
+  params,
+}: {
+  params: { roomId: string };
+}) {
   const currentUser = await getCurrentUser();
   if (!currentUser) {
     redirect('/login?redirect=/chat');
   }
 
   const conversations = await listConversationsForUser(currentUser.id);
+  const conversationId = params.roomId;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 pb-12 pt-8">
@@ -28,7 +33,7 @@ export default async function ChatPage({ params }: { params: { roomId: string } 
           currentUserId={currentUser.id}
           initialItems={conversations}
           className="flex-1"
-          activeConversationId={params.roomId}
+          activeConversationId={conversationId}
         />
       </div>
     </div>

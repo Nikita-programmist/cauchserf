@@ -1,10 +1,15 @@
 'use client';
 
+import type { User } from '@supabase/supabase-js';
 import ChatWindow from '@/components/chat/ChatWindow';
 import { useAuth } from '@/components/AuthProvider';
 
-export default function ChatRoomView({ roomId }: { roomId: string }) {
-  const { user } = useAuth();
+export default function ChatRoomView({
+  conversationId,
+}: {
+  conversationId: string;
+}) {
+  const { user } = useAuth() as { user: User | null };
 
   if (!user) {
     return (
@@ -14,5 +19,5 @@ export default function ChatRoomView({ roomId }: { roomId: string }) {
     );
   }
 
-  return <ChatWindow conversationId={roomId} currentUserId={user.id} />;
+  return <ChatWindow conversationId={conversationId} currentUserId={user.id} />;
 }
