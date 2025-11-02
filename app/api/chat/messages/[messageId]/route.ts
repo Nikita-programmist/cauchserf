@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 export async function PATCH(
   req: Request,
@@ -9,33 +9,24 @@ export async function PATCH(
   const supabase = createRouteHandlerClient({ cookies });
   const {
     data: { user },
-    error: authError,
   } = await supabase.auth.getUser();
-
-  if (authError) {
-    return NextResponse.json({ error: authError.message }, { status: 500 });
-  }
 
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const payload = await req.json().catch(() => ({}));
-  const textInput = typeof payload?.body === 'string' ? payload.body.trim() : '';
+  const { body } = await req.json();
+  const text = typeof body === 'string' ? body.trim() : '';
 
-  if (!textInput) {
+  if (!text) {
     return NextResponse.json({ error: 'empty' }, { status: 400 });
   }
 
-  const { data: msg, error: msgErr } = await supabase
+  const { data: msg } = await supabase
     .from('chat_messages')
     .select('id, sender_id')
     .eq('id', params.messageId)
     .maybeSingle();
-
-  if (msgErr) {
-    return NextResponse.json({ error: msgErr.message }, { status: 500 });
-  }
 
   if (!msg || msg.sender_id !== user.id) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
@@ -44,7 +35,7 @@ export async function PATCH(
   const { data: updated, error: updErr } = await supabase
     .from('chat_messages')
     .update({
-      body: textInput,
+      body: text,
       edited_at: new Date().toISOString(),
       deleted_at: null,
     })
@@ -66,26 +57,17 @@ export async function DELETE(
   const supabase = createRouteHandlerClient({ cookies });
   const {
     data: { user },
-    error: authError,
   } = await supabase.auth.getUser();
-
-  if (authError) {
-    return NextResponse.json({ error: authError.message }, { status: 500 });
-  }
 
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const { data: msg, error: msgErr } = await supabase
+  const { data: msg } = await supabase
     .from('chat_messages')
     .select('id, sender_id')
     .eq('id', params.messageId)
     .maybeSingle();
-
-  if (msgErr) {
-    return NextResponse.json({ error: msgErr.message }, { status: 500 });
-  }
 
   if (!msg || msg.sender_id !== user.id) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });

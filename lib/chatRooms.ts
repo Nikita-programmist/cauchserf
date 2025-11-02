@@ -16,7 +16,6 @@ export type ChatRoomListItem = {
 };
 
 function normalizeProfile(fallbackId: string, raw: any): ProfileSummary {
-  // supabase иногда суёт связку как массив
   if (Array.isArray(raw) && raw[0]) {
     return {
       id: raw[0].id,
@@ -62,8 +61,8 @@ export async function getCurrentUserProfile() {
 }
 
 /**
- * ГЛАВНОЕ: гарантирует, что между currentUser и otherUser есть приватная комната.
- * если есть — вернёт существующую, если нет — создаст.
+ * Гарантирует, что между currentUser и otherUser есть ROOM.
+ * Если нашлась — вернуть её, если нет — создать.
  */
 export async function ensureChatRoom(
   currentUserId: string,
@@ -71,14 +70,11 @@ export async function ensureChatRoom(
 ): Promise<{ id: string }> {
   const supabase = getServerSupabase();
 
-  // сначала ищем, может уже есть в любом порядке
   const { data: existing } = await supabase
     .from('chat_rooms')
     .select('id, traveler_id, host_id')
     .or(
-      // current -> traveler, other -> host
       `and(traveler_id.eq.${currentUserId},host_id.eq.${otherUserId}),` +
-        // или наоборот
         `and(traveler_id.eq.${otherUserId},host_id.eq.${currentUserId})`
     )
     .maybeSingle();
@@ -87,7 +83,6 @@ export async function ensureChatRoom(
     return { id: existing.id as string };
   }
 
-  // если нет — создаём. по умолчанию считаем, что инициатор = traveler
   const { data: inserted, error: insertErr } = await supabase
     .from('chat_rooms')
     .insert({
@@ -104,7 +99,6 @@ export async function ensureChatRoom(
   return { id: inserted.id as string };
 }
 
-// получить одну комнату + оба профиля
 export async function getChatRoomWithProfiles(roomId: string) {
   const supabase = getServerSupabase();
 
@@ -138,7 +132,6 @@ export async function getChatRoomWithProfiles(roomId: string) {
   };
 }
 
-// список чатов для страницы /chat
 export async function listUserChatRooms(userId: string): Promise<ChatRoomListItem[]> {
   const supabase = getServerSupabase();
 
@@ -167,7 +160,6 @@ export async function listUserChatRooms(userId: string): Promise<ChatRoomListIte
     const iAmTraveler = traveler.id === userId;
     const otherUser = iAmTraveler ? host : traveler;
 
-    // последнее сообщение
     const { data: lastMessages } = await supabase
       .from('chat_messages')
       .select('id, body, created_at')
@@ -177,7 +169,6 @@ export async function listUserChatRooms(userId: string): Promise<ChatRoomListIte
 
     const last = lastMessages?.[0] ?? null;
 
-    // непрочитанные
     const { count: unreadCount } = await supabase
       .from('chat_messages')
       .select('id', { count: 'exact', head: true })
@@ -194,7 +185,6 @@ export async function listUserChatRooms(userId: string): Promise<ChatRoomListIte
     });
   }
 
-  // сортируем по последнему сообщению
   results.sort((a, b) => {
     if (!a.lastMessageAt && !b.lastMessageAt) return 0;
     if (!a.lastMessageAt) return 1;
@@ -207,4 +197,3 @@ export async function listUserChatRooms(userId: string): Promise<ChatRoomListIte
 
   return results;
 }
-
