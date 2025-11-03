@@ -1,6 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/supabaseServer';
-import { sendMessage } from '@/lib/chatService';
+import { getCurrentUser, getServerSupabase } from '@/lib/supabaseServer';
+
+async function insertChatMessage(
+  conversationId: string,
+  userId: string,
+  text: string
+) {
+  const clean = text.trim();
+  if (!clean) {
+    throw new Error('empty');
+  }
+
+  const { error } = await getServerSupabase()
+    .from('chat_messages')
+    .insert({
+      room_id: conversationId,
+      sender_id: userId,
+      body: clean,
+    });
+
+  if (error) {
+    if (error.code === '42501') {
+      throw new Error('forbidden');
+    }
+
+    throw error;
+  }
+}
 
 export async function POST(
   req: NextRequest,
@@ -15,14 +41,14 @@ export async function POST(
   const text = body?.content ?? body?.text ?? '';
 
   try {
-    const msg = await sendMessage(params.conversationId, user.id, text);
-    return NextResponse.json(msg);
+    await insertChatMessage(params.conversationId, user.id, text);
+    return NextResponse.json({}, { status: 200 });
   } catch (err: any) {
     if (err.message === 'forbidden') {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
     if (err.message === 'empty') {
-      return NextResponse.json({ error: 'empty' }, { status: 400 });
+      return NextResponse.json({ error: 'content is required' }, { status: 400 });
     }
     return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }

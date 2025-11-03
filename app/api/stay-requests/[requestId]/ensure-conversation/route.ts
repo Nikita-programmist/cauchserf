@@ -62,7 +62,6 @@ export async function POST(
 
     return NextResponse.json({
       conversationId: result.conversationId,
-      participant,
     });
   } catch (err: any) {
     if (err?.message === 'forbidden') {
