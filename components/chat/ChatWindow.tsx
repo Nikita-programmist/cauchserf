@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 import { useRealtimeConversation } from "@/hooks/useRealtimeConversation";
-import { useAuth } from "@/components/AuthProvider";
 
 type Message = {
   id: string;
@@ -80,26 +79,26 @@ function removeMessage(list: Message[], id: string) {
   return list.filter((item) => item.id !== id);
 }
 
-type Participant = {
-  id: string;
-  name?: string | null;
-  avatar_url?: string | null;
-};
-
-export type ChatWindowProps = {
-  conversationId?: string | null;
-  participant?: Participant | null;
+type ChatWindowProps = {
+  conversationId: string;
+  currentUserId?: string;
+  participant?: {
+    id: string;
+    name?: string;
+    avatar_url?: string;
+  };
   header?: ReactNode;
 };
 
 export default function ChatWindow({
   conversationId,
+  currentUserId,
   participant,
   header,
 }: ChatWindowProps) {
-  const { user } = useAuth();
-  const currentUserId = user?.id ?? null;
-  const resolvedConversationId = conversationId ?? null;
+  const resolvedConversationId: string | null = conversationId
+    ? conversationId
+    : null;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(Boolean(resolvedConversationId));
@@ -402,7 +401,7 @@ export default function ChatWindow({
           <p className="text-sm text-slate-400">Пока нет сообщений</p>
         ) : (
           messages.map((m) => {
-            const isOwn = currentUserId && m.sender_id === currentUserId;
+            const isOwn = currentUserId ? m.sender_id === currentUserId : false;
 
             return (
               <div
