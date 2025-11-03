@@ -84,18 +84,19 @@ function removeMessage(list: Message[], id: string) {
 type ChatWindowProps = {
   conversationId: string;
   currentUserId?: string;
+  header?: ReactNode;
 };
 
 export default function ChatWindow({
   conversationId,
   currentUserId,
+  header,
 }: ChatWindowProps) {
   const participant = null as {
     id: string;
     name?: string;
     avatar_url?: string | null;
   } | null;
-  const header = null as ReactNode | null;
   const resolvedConversationId: string | null = conversationId
     ? conversationId
     : null;
