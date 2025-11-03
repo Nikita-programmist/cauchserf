@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-// Если есть утилита current user — подключи/используй, иначе закомментируй проверку
+import { getCurrentUser } from "@/lib/supabaseServer";
 
 export async function POST(
   req: Request,
@@ -16,15 +16,13 @@ export async function POST(
   }
 
   const body = await req.json().catch(() => null);
-  const rawContent =
-    typeof body?.content === "string" ? body.content.trim() : "";
+  const content = typeof body?.content === "string" ? body.content.trim() : "";
 
-  if (!rawContent) {
+  if (!content) {
     return NextResponse.json({ error: "content is required" }, { status: 400 });
   }
 
-  const { data: userData } = await supabase.auth.getUser();
-  const user = userData?.user;
+  const user = await getCurrentUser();
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -34,19 +32,14 @@ export async function POST(
     conversationKey: "conversation_id" | "room_id";
     userKey: "sender_id" | "user_id" | "author_id";
   }> = [
-    { conversationKey: "conversation_id", userKey: "sender_id" },
-    { conversationKey: "conversation_id", userKey: "user_id" },
-    { conversationKey: "conversation_id", userKey: "author_id" },
     { conversationKey: "room_id", userKey: "sender_id" },
-    { conversationKey: "room_id", userKey: "user_id" },
-    { conversationKey: "room_id", userKey: "author_id" },
   ];
 
   let lastError: { message: string } | null = null;
 
   for (const attempt of attempts) {
     const payload: Record<string, string> = {
-      content: rawContent,
+      content,
       [attempt.conversationKey]: conversationId,
       [attempt.userKey]: user.id,
     };
