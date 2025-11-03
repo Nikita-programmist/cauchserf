@@ -364,13 +364,13 @@ export async function sendMessage(
 
   // вставляем сообщение (через сервисный клиент с ручной проверкой доступа)
   const { data, error } = await supabase
-    .from('messages')
+    .from('chat_messages')
     .insert({
-      conversation_id: conversationId,
+      room_id: conversationId,
       sender_id: userId,
-      text: clean,
+      content: clean,
     })
-    .select('id, sender_id, text, created_at, read_at, edited_at')
+    .select('id, room_id, sender_id, content, created_at, edited_at')
     .single();
 
   if (error) throw error;
@@ -378,9 +378,9 @@ export async function sendMessage(
   return {
     id: data.id,
     senderId: data.sender_id,
-    text: data.text,
+    text: data.content,
     createdAt: data.created_at,
-    readAt: data.read_at,
+    readAt: null,
     editedAt: data.edited_at ?? null,
   };
 }
@@ -397,12 +397,9 @@ export async function getMessagesForConversation(
   const supabase = getServiceSupabase();
 
   const { data, error } = await supabase
-    .from('messages')
-    .select(
-      'id, conversation_id, sender_id, text, created_at, read_at, edited_at, deleted_at'
-    )
-    .eq('conversation_id', conversationId)
-    .is('deleted_at', null)
+    .from('chat_messages')
+    .select('id, room_id, sender_id, content, created_at, edited_at')
+    .eq('room_id', conversationId)
     .order('created_at', { ascending: true });
 
   if (error) {
@@ -411,7 +408,7 @@ export async function getMessagesForConversation(
 
   return (data ?? []).map((row) => ({
     id: row.id as string,
-    content: row.text as string,
+    content: row.content as string,
     sender_id: row.sender_id as string,
     created_at: row.created_at as string,
     edited_at: (row.edited_at as string | null) ?? null,

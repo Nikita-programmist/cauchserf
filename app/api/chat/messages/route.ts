@@ -5,25 +5,19 @@ export async function GET(req: Request) {
   const supabase = createClient();
   const { searchParams } = new URL(req.url);
 
-  // Принимаем и conversationId, и roomId (на случай легаси)
-  const id = searchParams.get("conversationId") ?? searchParams.get("roomId");
-  if (!id) {
-    return NextResponse.json({ error: "conversationId (or roomId) is required" }, { status: 400 });
+  const conversationId = searchParams.get("conversationId");
+  if (!conversationId) {
+    return NextResponse.json(
+      { error: "conversationId is required" },
+      { status: 400 }
+    );
   }
 
-  // Пытаемся сначала по conversation_id, если колонки нет — пробуем room_id
-  async function fetchBy(col: "conversation_id" | "room_id") {
-    return supabase
-      .from("chat_messages")
-      .select("*")
-      .eq(col, id)
-      .order("created_at", { ascending: true });
-  }
-
-  let { data, error } = await fetchBy("conversation_id");
-  if (error && /column .*conversation_id/i.test(error.message)) {
-    ({ data, error } = await fetchBy("room_id"));
-  }
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select("*")
+    .eq("room_id", conversationId)
+    .order("created_at", { ascending: true });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
