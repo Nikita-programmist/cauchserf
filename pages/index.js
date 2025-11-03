@@ -107,12 +107,10 @@ export default function Home() {
               <div className="glass-strong flex flex-col gap-4 rounded-3xl p-6 text-sm text-fg/80">
                 {conversationId ? (
                   <div className="h-[420px] w-full max-w-3xl">
-                    <ChatWindow conversationId={conversationId} />
+                    <ChatWindow conversationId={conversationId} currentUserId={user?.id} />
                   </div>
                 ) : (
-                  <div className="text-sm text-fg/70">
-                    Пока нет активных диалогов. Создайте заявку или отправьте сообщение, чтобы начать общение.
-                  </div>
+                  <div className="text-sm text-fg/70">Нет активных диалогов.</div>
                 )}
               </div>
             ) : (

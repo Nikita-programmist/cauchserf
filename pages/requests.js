@@ -128,6 +128,7 @@ export default function RequestsPage() {
   }, [router]);
 
   const isHost = profile?.role === 'host';
+  const user = profile;
 
   const handleOpenChat = useCallback(
     async (request) => {
@@ -148,7 +149,6 @@ export default function RequestsPage() {
           throw new Error(data?.error ?? 'failed');
         }
         setActiveConversationId(data.conversationId);
-        setActiveParticipant(data.participant ?? null);
         setRequests((prev) =>
           prev.map((item) =>
             item.id === request.id
@@ -302,10 +302,10 @@ export default function RequestsPage() {
           ) : null}
           {activeConversationId ? (
             <div className="h-[420px]">
-              <ChatWindow
-                conversationId={activeConversationId}
-                participant={activeParticipant}
-              />
+                <ChatWindow
+                  conversationId={activeConversationId}
+                  currentUserId={user?.id}
+                />
             </div>
           ) : (
             <p className="text-xs text-fg/70">

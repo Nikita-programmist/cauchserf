@@ -52,6 +52,8 @@ function normalizeMessage(input: any): Message | null {
       ? input.content
       : typeof input.text === "string"
       ? input.text
+      : typeof input.body === "string"
+      ? input.body
       : "";
 
   return {
@@ -82,20 +84,18 @@ function removeMessage(list: Message[], id: string) {
 type ChatWindowProps = {
   conversationId: string;
   currentUserId?: string;
-  participant?: {
-    id: string;
-    name?: string;
-    avatar_url?: string;
-  };
-  header?: ReactNode;
 };
 
 export default function ChatWindow({
   conversationId,
   currentUserId,
-  participant,
-  header,
 }: ChatWindowProps) {
+  const participant = null as {
+    id: string;
+    name?: string;
+    avatar_url?: string | null;
+  } | null;
+  const header = null as ReactNode | null;
   const resolvedConversationId: string | null = conversationId
     ? conversationId
     : null;
@@ -292,15 +292,9 @@ export default function ChatWindow({
           }
         );
 
-        const data = await res.json().catch(() => null);
-
         if (!res.ok) {
+          const data = await res.json().catch(() => null);
           throw new Error(data?.error ?? "failed");
-        }
-
-        const created = normalizeMessage(data);
-        if (created) {
-          setMessages((prev) => upsertMessage(prev, created));
         }
 
         setText("");
