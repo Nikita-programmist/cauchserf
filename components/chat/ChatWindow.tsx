@@ -289,19 +289,26 @@ export default function ChatWindow({
               "Content-Type": "application/json",
             },
             credentials: "include",
-            body: JSON.stringify({ content: value }),
+            body: JSON.stringify({ content: text }),
           }
         );
 
         if (!res.ok) {
+          setSubmitError("Не удалось отправить");
           const data = await res.json().catch(() => null);
           throw new Error(data?.error ?? "failed");
         }
 
         setText("");
+        try {
+          const refreshed = await fetchMessages(resolvedConversationId);
+          setMessages(refreshed);
+        } catch {
+          // игнорируем ошибку повторной загрузки
+        }
       }
     } catch (err) {
-      setSubmitError("Не удалось отправить сообщение. Попробуйте снова.");
+      setSubmitError("Не удалось отправить");
     } finally {
       setPending(false);
     }
