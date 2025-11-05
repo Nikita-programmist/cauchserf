@@ -20,6 +20,9 @@ export function useRealtimeConversation(
 ) {
   useEffect(() => {
     const supabase = getBrowserSupabase();
+    if (!conversationId || conversationId === '__none__') {
+      return;
+    }
 
     const channel = supabase
       .channel(`conversation:${conversationId}`)

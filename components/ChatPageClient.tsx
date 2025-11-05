@@ -33,7 +33,8 @@ export default function ChatPageClient({
       <div className="flex flex-1 flex-col">
         {selectedConversationId ? (
           <ChatWindow
-            conversationId={selectedConversationId}
+            conversationId={selectedConversationId ?? null}
+            requestId={selectedConversation?.requestId ?? null}
             currentUserId={currentUserId}
             header={
               selectedConversation ? (

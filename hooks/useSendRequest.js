@@ -42,14 +42,18 @@ export function useSendRequest() {
 
       const trimmedMessage = message?.trim() ?? '';
 
-      const { error: insertError } = await supabase.from('stay_requests').insert({
-        listing_id: listingId,
-        host_id: hostId,
-        traveler_id: user.id,
-        start_date: startDate,
-        end_date: endDate,
-        message: trimmedMessage || null
-      });
+      const { data: insertedRequests, error: insertError } = await supabase
+        .from('stay_requests')
+        .insert({
+          listing_id: listingId,
+          host_id: hostId,
+          traveler_id: user.id,
+          start_date: startDate,
+          end_date: endDate,
+          message: trimmedMessage || null
+        })
+        .select('id')
+        .single();
 
       if (insertError) {
         setError(insertError.message);
@@ -57,31 +61,14 @@ export function useSendRequest() {
         return { error: insertError };
       }
 
-      let roomId = null;
+      const requestId = insertedRequests?.id ?? null;
 
-      try {
-        const response = await fetch(`/api/chat/room?otherUserId=${hostId}`, {
-          method: 'GET',
-          credentials: 'include'
-        });
-
-        if (response.ok) {
-          const payload = await response.json();
-          roomId = payload?.roomId ?? null;
-        } else {
-          const payload = await response.json().catch(() => null);
-          console.error('Не удалось получить комнату чата', payload?.error);
-        }
-      } catch (ensureError) {
-        console.error('Ошибка при создании чата', ensureError);
-      }
-
-      if (trimmedMessage && roomId) {
-        const sendResponse = await fetch('/api/chat/messages', {
+      if (trimmedMessage && requestId) {
+        const sendResponse = await fetch('/api/messages', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roomId, text: trimmedMessage })
+          body: JSON.stringify({ requestId, text: trimmedMessage })
         });
 
         if (!sendResponse.ok) {
@@ -94,7 +81,7 @@ export function useSendRequest() {
       }
 
       setStatus('success');
-      return { error: null, roomId };
+      return { error: null, requestId };
     },
     [hasSupabaseEnv, supabase, user]
   );

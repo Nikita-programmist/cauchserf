@@ -153,6 +153,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
+`SUPABASE_SERVICE_ROLE_KEY` храните только на серверной стороне (в route handlers, server actions и т.д.) и не импортируйте его в клиентские компоненты или браузерные скрипты.
+
 ### Локальный запуск и проверка
 
 1. `npm install` и `npm run dev`.
