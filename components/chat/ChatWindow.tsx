@@ -82,13 +82,15 @@ function removeMessage(list: Message[], id: string) {
 }
 
 type ChatWindowProps = {
-  conversationId: string;
+  conversationId: string | null;
+  requestId?: string | null;
   currentUserId?: string;
   header?: ReactNode;
 };
 
 export default function ChatWindow({
   conversationId,
+  requestId,
   currentUserId,
   header,
 }: ChatWindowProps) {
@@ -97,25 +99,22 @@ export default function ChatWindow({
     name?: string;
     avatar_url?: string | null;
   } | null;
-  const resolvedConversationId: string | null = conversationId
-    ? conversationId
-    : null;
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(
+    conversationId ?? null
+  );
 
   const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(Boolean(resolvedConversationId));
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [text, setText] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   const fetchMessages = useCallback(async (id: string) => {
-    const res = await fetch(
-      `/api/chat/messages?conversationId=${encodeURIComponent(id)}`,
-      {
-        credentials: "include",
-      }
-    );
+    const params = new URLSearchParams({ requestId: id, limit: "100", offset: "0" });
+    const res = await fetch(`/api/messages?${params.toString()}`, {
+      credentials: "include",
+    });
 
     const data = await res.json().catch(() => null);
 
@@ -124,6 +123,10 @@ export default function ChatWindow({
         (data && typeof data.error === "string" ? data.error : null) ??
           "failed"
       );
+    }
+
+    if (typeof data?.conversationId === "string") {
+      setActiveConversationId(data.conversationId);
     }
 
     const normalized = (Array.isArray(data?.messages) ? data.messages : [])
@@ -136,14 +139,14 @@ export default function ChatWindow({
   }, []);
 
   useEffect(() => {
-    if (!resolvedConversationId) {
+    if (!requestId) {
       setMessages([]);
-      setLoading(false);
       setError(null);
       setSubmitError(null);
-      setEditingId(null);
       setText("");
       setPending(false);
+      setActiveConversationId(conversationId ?? null);
+      setLoading(false);
       return;
     }
 
@@ -152,13 +155,12 @@ export default function ChatWindow({
     setLoading(true);
     setError(null);
     setSubmitError(null);
-    setEditingId(null);
     setText("");
     setPending(false);
 
     (async () => {
       try {
-        const normalized = await fetchMessages(resolvedConversationId);
+        const normalized = await fetchMessages(requestId);
         if (!active) return;
         setMessages(normalized);
         setError(null);
@@ -176,22 +178,11 @@ export default function ChatWindow({
     return () => {
       active = false;
     };
-  }, [resolvedConversationId, fetchMessages]);
-
-  useEffect(() => {
-    if (!resolvedConversationId) {
-      return;
-    }
-
-    fetch(`/api/conversations/${resolvedConversationId}/read`, {
-      method: "POST",
-      credentials: "include",
-    }).catch(() => undefined);
-  }, [resolvedConversationId]);
+  }, [conversationId, requestId, fetchMessages]);
 
   const handleRealtimeInsert = useCallback(
     (payload: any) => {
-      if (!resolvedConversationId) {
+      if (!activeConversationId) {
         return;
       }
 
@@ -202,7 +193,7 @@ export default function ChatWindow({
 
       if (
         payload?.conversation_id &&
-        payload.conversation_id !== resolvedConversationId
+        payload.conversation_id !== activeConversationId
       ) {
         return;
       }
@@ -212,12 +203,12 @@ export default function ChatWindow({
         setMessages((prev) => upsertMessage(prev, message));
       }
     },
-    [resolvedConversationId]
+    [activeConversationId]
   );
 
   const handleRealtimeUpdate = useCallback(
     (payload: any) => {
-      if (!resolvedConversationId) {
+      if (!activeConversationId) {
         return;
       }
 
@@ -228,7 +219,7 @@ export default function ChatWindow({
 
       if (
         payload?.conversation_id &&
-        payload.conversation_id !== resolvedConversationId
+        payload.conversation_id !== activeConversationId
       ) {
         return;
       }
@@ -238,10 +229,10 @@ export default function ChatWindow({
         setMessages((prev) => upsertMessage(prev, message));
       }
     },
-    [resolvedConversationId]
+    [activeConversationId]
   );
 
-  const realtimeConversationId = resolvedConversationId ?? "__none__";
+  const realtimeConversationId = activeConversationId ?? "__none__";
 
   useRealtimeConversation(
     realtimeConversationId,
@@ -251,90 +242,42 @@ export default function ChatWindow({
 
   const handleSend = async () => {
     const value = text.trim();
-    if (!value || pending || !resolvedConversationId) return;
+    if (!value || pending || !requestId) return;
 
     setPending(true);
     setSubmitError(null);
 
     try {
-      if (editingId) {
-        const res = await fetch(`/api/chat/messages/${editingId}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify({ content: value }),
-        });
+      const res = await fetch(`/api/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ requestId, text: value }),
+      });
 
-        const data = await res.json().catch(() => null);
+      const data = await res.json().catch(() => null);
 
-        if (!res.ok || !data?.message) {
-          throw new Error(data?.error ?? "failed");
-        }
-
-        const updated = normalizeMessage(data.message);
-        if (updated) {
-          setMessages((prev) => upsertMessage(prev, updated));
-        }
-
-        setEditingId(null);
-        setText("");
-      } else {
-        const res = await fetch(
-          `/api/conversations/${resolvedConversationId}/send`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            credentials: "include",
-            body: JSON.stringify({ content: text }),
-          }
-        );
-
-        if (!res.ok) {
-          setSubmitError("Не удалось отправить");
-          const data = await res.json().catch(() => null);
-          throw new Error(data?.error ?? "failed");
-        }
-
-        setText("");
-        try {
-          const refreshed = await fetchMessages(resolvedConversationId);
-          setMessages(refreshed);
-        } catch {
-          // игнорируем ошибку повторной загрузки
-        }
+      if (!res.ok || !data?.message) {
+        setSubmitError("Не удалось отправить");
+        throw new Error(data?.error ?? "failed");
       }
+
+      if (typeof data?.conversationId === "string") {
+        setActiveConversationId(data.conversationId);
+      }
+
+      const normalized = normalizeMessage(data.message);
+      if (normalized) {
+        setMessages((prev) => upsertMessage(prev, normalized));
+      }
+
+      setText("");
     } catch (err) {
       setSubmitError("Не удалось отправить");
     } finally {
       setPending(false);
-    }
-  };
-
-  const handleDelete = async (messageId: string) => {
-    setSubmitError(null);
-
-    try {
-      const res = await fetch(`/api/chat/messages/${messageId}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error ?? "failed");
-      }
-
-      setMessages((prev) => removeMessage(prev, messageId));
-      if (editingId === messageId) {
-        setEditingId(null);
-        setText("");
-      }
-    } catch (err) {
-      setSubmitError("Не удалось удалить сообщение. Попробуйте снова.");
     }
   };
 
@@ -379,10 +322,10 @@ export default function ChatWindow({
     );
   }, [header, participant]);
 
-  if (!resolvedConversationId) {
+  if (!requestId) {
     return (
       <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white/50 p-6 text-center text-sm text-slate-500">
-        Выберите заявку
+        Выберите заявку, чтобы начать переписку
       </div>
     );
   }
@@ -427,28 +370,6 @@ export default function ChatWindow({
                       изменено
                     </span>
                   ) : null}
-                  {isOwn ? (
-                    <div className="absolute -right-6 top-1 flex flex-col gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingId(m.id);
-                          setText(m.content);
-                          setSubmitError(null);
-                        }}
-                        className="text-[10px] text-emerald-600"
-                      >
-                        изм
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(m.id)}
-                        className="text-[10px] text-red-500"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ) : null}
                 </div>
               </div>
             );
@@ -469,9 +390,7 @@ export default function ChatWindow({
                 handleSend();
               }
             }}
-            placeholder={
-              editingId ? "Редактируете сообщение…" : "Написать сообщение"
-            }
+            placeholder="Написать сообщение"
             className="flex-1 rounded-full border border-slate-200 px-4 py-2 text-sm focus:border-emerald-500 focus:outline-none"
           />
           <button
@@ -480,7 +399,7 @@ export default function ChatWindow({
             disabled={pending}
             className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-60"
           >
-            {editingId ? "Сохранить" : "Отправить"}
+            Отправить
           </button>
         </div>
       </div>

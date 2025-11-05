@@ -1,10 +1,10 @@
-export async function sendChatMessage(conversationId: string, text: string) {
-  const response = await fetch(`/api/conversations/${conversationId}/send`, {
+export async function sendChatMessage(requestId: string, text: string) {
+  const response = await fetch(`/api/messages`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ content: text })
+    body: JSON.stringify({ requestId, text })
   });
 
   if (!response.ok) {
@@ -16,14 +16,6 @@ export async function sendChatMessage(conversationId: string, text: string) {
 }
 
 export async function markConversationReadClient(conversationId: string) {
-  const response = await fetch(`/api/conversations/${conversationId}/read`, {
-    method: 'POST'
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Failed to mark read' }));
-    throw new Error(error.error ?? 'Failed to mark read');
-  }
-
-  return response.json();
+  console.warn('markConversationReadClient is deprecated. Conversation id:', conversationId);
+  return { ok: true };
 }

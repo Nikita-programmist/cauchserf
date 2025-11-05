@@ -24,6 +24,15 @@ export type ConversationListItem = {
   unreadCount: number;
 };
 
+type StayRequestRow = {
+  id: string;
+  traveler_id: string;
+  host_id: string;
+  message: string | null;
+  created_at: string | null;
+  conversation_id: string | null;
+};
+
 function resolveProfileName(profile: ProfileRow | null, fallback: string) {
   if (!profile) return fallback;
 
@@ -177,7 +186,14 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
 
   if (requestsError) throw requestsError;
 
-  for (const request of requests ?? []) {
+  const requestByConversationId = new Map<string, StayRequestRow>();
+  for (const request of (requests ?? []) as StayRequestRow[]) {
+    if (request?.conversation_id) {
+      requestByConversationId.set(request.conversation_id, request);
+    }
+  }
+
+  for (const request of (requests ?? []) as StayRequestRow[]) {
     const otherUserId =
       request.traveler_id === userId
         ? request.host_id
@@ -229,12 +245,13 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
     const otherUserId =
       conv.traveler_id === userId ? conv.host_id : conv.traveler_id;
     const profile = otherUserId ? profileMap.get(otherUserId) ?? null : null;
+    const linkedRequest = requestByConversationId.get(conv.id) ?? null;
 
     result.push({
       id: `conversation-${conv.id}`,
       conversationId: conv.id,
       type: 'conversation',
-      requestId: null,
+      requestId: linkedRequest?.id ?? null,
       lastMessageText: conv.last_message_text ?? '',
       lastMessageAt: conv.last_message_at ?? null,
       otherUser: {

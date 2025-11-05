@@ -97,15 +97,15 @@ export function useChatRoom(roomId: string) {
   const editMessage = async (id: string, body: string) => {
     const text = body.trim();
     if (!text) return;
-    await fetch(`/api/chat/messages/${id}`, {
+    await fetch(`/api/messages/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ body: text }),
+      body: JSON.stringify({ text }),
     });
   };
 
   const deleteMessage = async (id: string) => {
-    await fetch(`/api/chat/messages/${id}`, {
+    await fetch(`/api/messages/${id}`, {
       method: 'DELETE',
     });
   };

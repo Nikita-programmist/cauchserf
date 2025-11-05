@@ -10,17 +10,19 @@ type Message = {
   edited_at?: string | null;
 };
 
-export function useConversation(conversationId: string) {
+export function useConversation(requestId: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   const fetchMessages = useCallback(async () => {
-    if (!conversationId) {
+    if (!requestId) {
       setMessages([]);
       setLoading(false);
       return;
     }
-    const res = await fetch(`/api/chat/messages?conversationId=${conversationId}`, {
+    const params = new URLSearchParams({ requestId, limit: '100', offset: '0' });
+    const res = await fetch(`/api/messages?${params.toString()}`, {
       credentials: "include",
     });
     if (!res.ok) {
@@ -28,9 +30,21 @@ export function useConversation(conversationId: string) {
       return;
     }
     const data = await res.json();
-    setMessages(data.messages || []);
+    if (typeof data?.conversationId === 'string') {
+      setConversationId(data.conversationId);
+    }
+    const normalized = (Array.isArray(data?.messages) ? data.messages : []).map(
+      (item: any) => ({
+        id: item.id,
+        content: item.text ?? item.content ?? '',
+        sender_id: item.sender_id,
+        created_at: item.created_at,
+        edited_at: item.edited_at ?? null,
+      })
+    );
+    setMessages(normalized);
     setLoading(false);
-  }, [conversationId]);
+  }, [requestId]);
 
   useEffect(() => {
     fetchMessages();
@@ -38,35 +52,60 @@ export function useConversation(conversationId: string) {
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
-    const res = await fetch(`/api/conversations/${conversationId}/send`, {
+    if (!requestId) return;
+    const res = await fetch(`/api/messages`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: text }),
+      body: JSON.stringify({ requestId, text }),
     });
     if (res.ok) {
-      await fetchMessages();
+      const data = await res.json().catch(() => null);
+      if (data?.conversationId) {
+        setConversationId(data.conversationId);
+      }
+      if (data?.message) {
+        const message = {
+          id: data.message.id,
+          content: data.message.text ?? data.message.content ?? text,
+          sender_id: data.message.sender_id,
+          created_at: data.message.created_at,
+          edited_at: data.message.edited_at ?? null,
+        };
+        setMessages((prev) => [...prev, message]);
+      } else {
+        await fetchMessages();
+      }
     }
   };
 
   const editMessage = async (messageId: string, text: string) => {
-    const res = await fetch(`/api/chat/messages/${messageId}`, {
+    const res = await fetch(`/api/messages/${messageId}`, {
       method: "PATCH",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: text }),
+      body: JSON.stringify({ text }),
     });
     if (res.ok) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId ? { ...m, content: text, edited_at: new Date().toISOString() } : m
-        )
-      );
+      const payload = await res.json().catch(() => null);
+      if (payload?.message) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  content: payload.message.text ?? text,
+                  edited_at: payload.message.edited_at ?? new Date().toISOString(),
+                }
+              : m
+          )
+        );
+      }
     }
   };
 
   const deleteMessage = async (messageId: string) => {
-    const res = await fetch(`/api/chat/messages/${messageId}`, {
+    const res = await fetch(`/api/messages/${messageId}`, {
       method: "DELETE",
       credentials: "include",
     });
@@ -78,6 +117,7 @@ export function useConversation(conversationId: string) {
   return {
     messages,
     loading,
+    conversationId,
     sendMessage,
     editMessage,
     deleteMessage,
