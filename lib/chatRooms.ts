@@ -1,5 +1,5 @@
 // lib/chatRooms.ts
-import { getServerSupabase } from '@/lib/supabaseServer';
+import { admin } from '@/lib/supabase/server';
 
 export type ProfileSummary = {
   id: string;
@@ -37,29 +37,6 @@ function normalizeProfile(fallbackId: string, raw: any): ProfileSummary {
   };
 }
 
-export async function getCurrentUserProfile() {
-  const supabase = getServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, display_name, avatar_url')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (!profile) return null;
-
-  return {
-    id: profile.id,
-    display_name: profile.display_name ?? null,
-    avatar_url: profile.avatar_url ?? null,
-  } satisfies ProfileSummary;
-}
-
 /**
  * ВАЖНО: нужен для /app/api/chat/room/route.ts
  */
@@ -67,41 +44,41 @@ export async function ensureChatRoom(
   currentUserId: string,
   otherUserId: string
 ): Promise<{ id: string }> {
-  const supabase = getServerSupabase();
+  const client = admin();
 
-  const { data: existing } = await supabase
+  const { data: existing } = await client
     .from('chat_rooms')
     .select('id, traveler_id, host_id')
     .or(
       `and(traveler_id.eq.${currentUserId},host_id.eq.${otherUserId}),` +
         `and(traveler_id.eq.${otherUserId},host_id.eq.${currentUserId})`
     )
-    .maybeSingle();
+    .maybeSingle<{ id: string | null }>();
 
-  if (existing) {
-    return { id: existing.id as string };
+  if (existing?.id) {
+    return { id: existing.id };
   }
 
-  const { data: inserted, error: insertErr } = await supabase
+  const { data: inserted, error: insertErr } = await client
     .from('chat_rooms')
     .insert({
       traveler_id: currentUserId,
       host_id: otherUserId,
-    })
+    } as never)
     .select('id')
-    .maybeSingle();
+    .maybeSingle<{ id: string | null }>();
 
-  if (insertErr || !inserted) {
+  if (insertErr || !inserted?.id) {
     throw new Error(insertErr?.message ?? 'cannot create chat room');
   }
 
-  return { id: inserted.id as string };
+  return { id: inserted.id };
 }
 
 export async function getChatRoomWithProfiles(roomId: string) {
-  const supabase = getServerSupabase();
+  const client = admin();
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('chat_rooms')
     .select(
       `
@@ -114,7 +91,7 @@ export async function getChatRoomWithProfiles(roomId: string) {
     `
     )
     .eq('id', roomId)
-    .maybeSingle();
+    .maybeSingle<Record<string, any>>();
 
   if (error || !data) return null;
 
@@ -132,9 +109,9 @@ export async function getChatRoomWithProfiles(roomId: string) {
 }
 
 export async function listUserChatRooms(userId: string): Promise<ChatRoomListItem[]> {
-  const supabase = getServerSupabase();
+  const client = admin();
 
-  const { data: rooms, error } = await supabase
+  const { data: rooms, error } = await client
     .from('chat_rooms')
     .select(
       `
@@ -150,25 +127,30 @@ export async function listUserChatRooms(userId: string): Promise<ChatRoomListIte
 
   if (error || !rooms) return [];
 
+  const records = rooms as Array<Record<string, any>>;
   const results: ChatRoomListItem[] = [];
 
-  for (const room of rooms) {
-    const traveler = normalizeProfile(room.traveler_id as string, (room as any).traveler);
-    const host = normalizeProfile(room.host_id as string, (room as any).host);
+  for (const room of records) {
+    const traveler = normalizeProfile(room.traveler_id as string, room.traveler);
+    const host = normalizeProfile(room.host_id as string, room.host);
 
     const iAmTraveler = traveler.id === userId;
     const otherUser = iAmTraveler ? host : traveler;
 
-    const { data: lastMessages } = await supabase
+    const { data: lastMessages } = await client
       .from('chat_messages')
       .select('id, body, created_at')
       .eq('room_id', room.id as string)
       .order('created_at', { ascending: false })
       .limit(1);
 
-    const last = lastMessages?.[0] ?? null;
+    const last = (lastMessages?.[0] ?? null) as Record<string, any> | null;
+    const lastMessageText =
+      typeof last?.body === 'string' ? last.body : '';
+    const lastMessageAt =
+      typeof last?.created_at === 'string' ? last.created_at : null;
 
-    const { count: unreadCount } = await supabase
+    const { count: unreadCount } = await client
       .from('chat_messages')
       .select('id', { count: 'exact', head: true })
       .eq('room_id', room.id as string)
@@ -178,8 +160,8 @@ export async function listUserChatRooms(userId: string): Promise<ChatRoomListIte
     results.push({
       roomId: room.id as string,
       otherUser,
-      lastMessageText: last?.body ?? '',
-      lastMessageAt: last?.created_at ?? null,
+      lastMessageText,
+      lastMessageAt,
       unreadCount: unreadCount ?? 0,
     });
   }

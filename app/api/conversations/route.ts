@@ -1,10 +1,29 @@
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/supabaseServer';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { listConversationsForUser } from '@/lib/chatService';
+import type { Database } from '@/lib/supabase/types';
+
+export const runtime = 'nodejs';
+
+async function getAuthUser() {
+  const client = createRouteHandlerClient<Database>({ cookies });
+
+  const {
+    data: { user },
+    error,
+  } = await client.auth.getUser();
+
+  if (error || !user) {
+    return null;
+  }
+
+  return user;
+}
 
 // GET /api/conversations
 export async function GET() {
-  const user = await getCurrentUser();
+  const user = await getAuthUser();
 
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });

@@ -1,8 +1,10 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { getServerSupabaseAdmin } from '@/lib/supabase/server-admin';
+import { admin } from '@/lib/supabase/server';
 import type { Database } from '@/lib/supabase/types';
+
+export const runtime = 'nodejs';
 
 async function getAuthUser() {
   const client = createRouteHandlerClient<Database>({ cookies });
@@ -19,9 +21,9 @@ async function getAuthUser() {
 }
 
 async function loadMessage(messageId: string) {
-  const admin = getServerSupabaseAdmin();
+  const client = admin();
 
-  const { data: message, error } = await admin
+  const { data: message, error } = await client
     .from('messages')
     .select('id, conversation_id, sender_id, text, created_at, edited_at, deleted_at')
     .eq('id', messageId)
@@ -31,7 +33,7 @@ async function loadMessage(messageId: string) {
     return { error: NextResponse.json({ error: 'Message not found' }, { status: 404 }) };
   }
 
-  const { data: request, error: requestError } = await admin
+  const { data: request, error: requestError } = await client
     .from('stay_requests')
     .select('id, traveler_id, host_id')
     .eq('conversation_id', message.conversation_id)
@@ -75,9 +77,9 @@ export async function PATCH(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const admin = getServerSupabaseAdmin();
+  const client = admin();
 
-  const { data, error } = await admin
+  const { data, error } = await client
     .from('messages')
     .update({ text, edited_at: new Date().toISOString() })
     .eq('id', params.messageId)
@@ -116,9 +118,9 @@ export async function DELETE(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const admin = getServerSupabaseAdmin();
+  const client = admin();
 
-  const { error } = await admin
+  const { error } = await client
     .from('messages')
     .delete()
     .eq('id', params.messageId);

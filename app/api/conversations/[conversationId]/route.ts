@@ -1,6 +1,26 @@
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { getCurrentUser, getServiceSupabase } from '@/lib/supabaseServer';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { admin } from '@/lib/supabase/server';
 import { getConversationWithMessages } from '@/lib/chatService';
+import type { Database } from '@/lib/supabase/types';
+
+export const runtime = 'nodejs';
+
+async function getAuthUser() {
+  const client = createRouteHandlerClient<Database>({ cookies });
+
+  const {
+    data: { user },
+    error,
+  } = await client.auth.getUser();
+
+  if (error || !user) {
+    return null;
+  }
+
+  return user;
+}
 
 function resolveProfileName(profile: any, fallback: string) {
   if (!profile) return fallback;
@@ -35,7 +55,7 @@ export async function GET(
   _req: Request,
   ctx: { params: { conversationId: string } }
 ) {
-  const user = await getCurrentUser();
+  const user = await getAuthUser();
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
@@ -81,9 +101,9 @@ async function buildStayRequestConversation(
   requestId: string,
   userId: string
 ) {
-  const supabase = getServiceSupabase();
+  const client = admin();
 
-  const { data: request, error } = await supabase
+  const { data: request, error } = await client
     .from('stay_requests')
     .select('id, traveler_id, host_id, message, created_at')
     .eq('id', requestId)
@@ -100,13 +120,13 @@ async function buildStayRequestConversation(
     throw new Error('forbidden');
   }
 
-  const { data: travelerProfile } = await supabase
+  const { data: travelerProfile } = await client
     .from('profiles')
     .select('id, full_name, first_name, last_name, name, avatar_url')
     .eq('id', request.traveler_id)
     .maybeSingle();
 
-  const { data: hostProfile } = await supabase
+  const { data: hostProfile } = await client
     .from('profiles')
     .select('id, full_name, first_name, last_name, name, avatar_url')
     .eq('id', request.host_id)

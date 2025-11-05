@@ -84,14 +84,23 @@ export function useChatRoom(roomId: string) {
 
   const sendMessage = async (text: string) => {
     const body = text.trim();
-    if (!body || !roomId || !currentUserId) return;
+    if (!body || !roomId) return;
     setIsSending(true);
-    await supabase.from('chat_messages').insert({
-      room_id: roomId,
-      sender_id: currentUserId,
-      body,
-    });
-    setIsSending(false);
+
+    try {
+      const res = await fetch(`/api/conversations/${roomId}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: body }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? 'Failed to send message');
+      }
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const editMessage = async (id: string, body: string) => {
