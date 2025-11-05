@@ -1,6 +1,26 @@
+import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSupabase } from '@/lib/supabaseServer';
-import { ensureChatRoom, getCurrentUserProfile } from '@/lib/chatRooms';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { ensureChatRoom } from '@/lib/chatRooms';
+import { admin } from '@/lib/supabase/server';
+import type { Database } from '@/lib/supabase/types';
+
+export const runtime = 'nodejs';
+
+async function getAuthUser() {
+  const client = createRouteHandlerClient<Database>({ cookies });
+
+  const {
+    data: { user },
+    error,
+  } = await client.auth.getUser();
+
+  if (error || !user) {
+    return null;
+  }
+
+  return user;
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -13,28 +33,28 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const currentProfile = await getCurrentUserProfile();
+  const user = await getAuthUser();
 
-  if (!currentProfile) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (currentProfile.id === otherUserId) {
+  if (user.id === otherUserId) {
     return NextResponse.json(
       { error: 'Cannot create chat with yourself' },
       { status: 400 }
     );
   }
 
-  const supabase = getServerSupabase();
+  const client = admin();
 
-  const { data: existingRoom, error: existingError } = await supabase
+  const { data: existingRoom, error: existingError } = await client
     .from('chat_rooms')
     .select('id, traveler_id, host_id, created_at')
     .or(
-      `and(traveler_id.eq.${currentProfile.id},host_id.eq.${otherUserId}),and(traveler_id.eq.${otherUserId},host_id.eq.${currentProfile.id})`
+      `and(traveler_id.eq.${user.id},host_id.eq.${otherUserId}),and(traveler_id.eq.${otherUserId},host_id.eq.${user.id})`
     )
-    .maybeSingle();
+    .maybeSingle<{ id: string | null }>();
 
   if (existingError) {
     return NextResponse.json(
@@ -43,19 +63,19 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  if (existingRoom) {
+  if (existingRoom?.id) {
     return NextResponse.json({ roomId: existingRoom.id });
   }
 
-  const { data: requestRow, error: requestError } = await supabase
+  const { data: requestRow, error: requestError } = await client
     .from('stay_requests')
     .select('traveler_id, host_id, created_at')
     .or(
-      `and(traveler_id.eq.${currentProfile.id},host_id.eq.${otherUserId}),and(traveler_id.eq.${otherUserId},host_id.eq.${currentProfile.id})`
+      `and(traveler_id.eq.${user.id},host_id.eq.${otherUserId}),and(traveler_id.eq.${otherUserId},host_id.eq.${user.id})`
     )
     .order('created_at', { ascending: true })
     .limit(1)
-    .maybeSingle();
+    .maybeSingle<{ traveler_id: string | null; host_id: string | null }>();
 
   if (requestError) {
     return NextResponse.json(
@@ -69,6 +89,13 @@ export async function GET(req: NextRequest) {
       { error: 'No stay request found between users' },
       { status: 404 }
     );
+  }
+
+  const participant =
+    requestRow.traveler_id === user.id || requestRow.host_id === user.id;
+
+  if (!participant) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const room = await ensureChatRoom(

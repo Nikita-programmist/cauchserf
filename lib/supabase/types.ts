@@ -117,6 +117,81 @@ export type Database = {
         };
         Relationships: [];
       };
+      bookings: {
+        Row: {
+          id: string;
+          traveler_id: string;
+          host_id: string;
+        };
+        Insert: {
+          id?: string;
+          traveler_id: string;
+          host_id: string;
+        };
+        Update: {
+          id?: string;
+          traveler_id?: string;
+          host_id?: string;
+        };
+        Relationships: [];
+      };
+      chat_rooms: {
+        Row: {
+          id: string;
+          traveler_id: string;
+          host_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          traveler_id: string;
+          host_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          traveler_id?: string;
+          host_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      chat_messages: {
+        Row: {
+          id: string;
+          room_id: string;
+          sender_id: string;
+          content: string | null;
+          body: string | null;
+          created_at: string;
+          edited_at: string | null;
+          deleted_at: string | null;
+          read_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          room_id: string;
+          sender_id: string;
+          content?: string | null;
+          body?: string | null;
+          created_at?: string;
+          edited_at?: string | null;
+          deleted_at?: string | null;
+          read_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          room_id?: string;
+          sender_id?: string;
+          content?: string | null;
+          body?: string | null;
+          created_at?: string;
+          edited_at?: string | null;
+          deleted_at?: string | null;
+          read_at?: string | null;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           id: string;

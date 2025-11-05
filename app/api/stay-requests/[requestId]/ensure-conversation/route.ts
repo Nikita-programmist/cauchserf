@@ -1,12 +1,32 @@
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { getCurrentUser, getServiceSupabase } from '@/lib/supabaseServer';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { ensureConversationForStayRequest } from '@/lib/chatService';
+import { admin } from '@/lib/supabase/server';
+import type { Database } from '@/lib/supabase/types';
+
+export const runtime = 'nodejs';
+
+async function getAuthUser() {
+  const client = createRouteHandlerClient<Database>({ cookies });
+
+  const {
+    data: { user },
+    error,
+  } = await client.auth.getUser();
+
+  if (error || !user) {
+    return null;
+  }
+
+  return user;
+}
 
 export async function POST(
   _req: Request,
   { params }: { params: { requestId: string } }
 ) {
-  const user = await getCurrentUser();
+  const user = await getAuthUser();
 
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -18,8 +38,8 @@ export async function POST(
       user.id
     );
 
-    const supabase = getServiceSupabase();
-    const { data: requestRow } = await supabase
+    const client = admin();
+    const { data: requestRow } = await client
       .from('stay_requests')
       .select('traveler_id, host_id')
       .eq('id', params.requestId)
@@ -37,7 +57,7 @@ export async function POST(
     } | null = null;
 
     if (otherParticipantId) {
-      const { data: profileRow } = await supabase
+      const { data: profileRow } = await client
         .from('profiles')
         .select('id, first_name, last_name, avatar_url')
         .eq('id', otherParticipantId)

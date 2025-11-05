@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { getServerSupabaseAdmin } from '@/lib/supabase/server-admin';
+import { admin } from '@/lib/supabase/server';
 import type { Database } from '@/lib/supabase/types';
 
 export const runtime = 'nodejs';
@@ -39,9 +39,9 @@ async function assertRequestParticipation(
   requestId: string,
   userId: string
 ) {
-  const admin = getServerSupabaseAdmin();
+  const client = admin();
 
-  const { data, error } = await admin
+  const { data, error } = await client
     .from('stay_requests')
     .select('id, traveler_id, host_id, conversation_id')
     .eq('id', requestId)
@@ -67,12 +67,12 @@ type StayRequestIdentifiers = Pick<
 >;
 
 async function ensureConversationId(request: StayRequestIdentifiers) {
-  const admin = getServerSupabaseAdmin();
+  const client = admin();
   if (request.conversation_id) {
     return request.conversation_id;
   }
 
-  const { data: created, error } = await admin
+  const { data: created, error } = await client
     .from('conversations')
     .insert({
       traveler_id: request.traveler_id,
@@ -87,12 +87,12 @@ async function ensureConversationId(request: StayRequestIdentifiers) {
 
   const conversationId = created.id;
 
-  await admin
+  await client
     .from('stay_requests')
     .update({ conversation_id: conversationId })
     .eq('id', request.id);
 
-  await admin
+  await client
     .from('conversation_bookings')
     .upsert(
       { booking_id: request.id, conversation_id: conversationId },
@@ -128,9 +128,9 @@ export async function POST(req: Request) {
     }
 
     const conversationId = await ensureConversationId(participation.request);
-    const admin = getServerSupabaseAdmin();
+    const client = admin();
 
-    const { data, error } = await admin
+    const { data, error } = await client
       .from('messages')
       .insert({
         conversation_id: conversationId,
@@ -180,7 +180,7 @@ export async function GET(req: Request) {
     }
 
     const { limit, offset } = parsePagination(searchParams);
-    const admin = getServerSupabaseAdmin();
+    const client = admin();
 
     const conversationId = participation.request.conversation_id;
 
@@ -196,7 +196,7 @@ export async function GET(req: Request) {
     }
 
     const rangeTo = offset + limit - 1;
-    const { data, error } = await admin
+    const { data, error } = await client
       .from('messages')
       .select('id, conversation_id, sender_id, text, created_at, edited_at, deleted_at')
       .eq('conversation_id', conversationId)

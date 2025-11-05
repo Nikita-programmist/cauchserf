@@ -1,4 +1,4 @@
-import { getServerSupabase, getServiceSupabase } from '@/lib/supabaseServer';
+import { admin } from '@/lib/supabase/server';
 
 type ProfileRow = {
   id: string;
@@ -74,10 +74,10 @@ function resolveAvatarUrl(profile: ProfileRow | null) {
 // Создаёт (или возвращает существующий) чат для конкретной брони
 // Логика: одна бронь = один приватный диалог traveler<->host
 export async function getOrCreateConversationForBooking(bookingId: string) {
-  const admin = getServiceSupabase();
+  const client = admin();
 
   // 1. найти бронирование
-  const { data: booking, error: bookingErr } = await admin
+  const { data: booking, error: bookingErr } = await client
     .from('bookings')
     .select('id, traveler_id, host_id')
     .eq('id', bookingId)
@@ -88,7 +88,7 @@ export async function getOrCreateConversationForBooking(bookingId: string) {
   }
 
   // 2. проверить, уже связана ли эта бронь с разговором
-  const { data: existingLink, error: linkErr } = await admin
+  const { data: existingLink, error: linkErr } = await client
     .from('conversation_bookings')
     .select('conversation_id')
     .eq('booking_id', bookingId)
@@ -99,7 +99,7 @@ export async function getOrCreateConversationForBooking(bookingId: string) {
   }
 
   // 3. создать новый conversation
-  const { data: conv, error: convErr } = await admin
+  const { data: conv, error: convErr } = await client
     .from('conversations')
     .insert({
       traveler_id: booking.traveler_id,
@@ -113,7 +113,7 @@ export async function getOrCreateConversationForBooking(bookingId: string) {
   }
 
   // 4. связать booking -> conversation
-  const { error: insertErr } = await admin
+  const { error: insertErr } = await client
     .from('conversation_bookings')
     .insert({
       booking_id: booking.id,
@@ -132,9 +132,9 @@ async function getConversationRowForUser(
   conversationId: string,
   userId: string
 ) {
-  const supabase = getServiceSupabase();
+  const client = admin();
 
-  const { data: convo, error } = await supabase
+  const { data: convo, error } = await client
     .from('conversations')
     .select('id, traveler_id, host_id')
     .eq('id', conversationId)
@@ -152,14 +152,12 @@ async function getConversationRowForUser(
 
 // список всех диалогов текущего юзера + превью
 export async function listConversationsForUser(userId: string): Promise<ConversationListItem[]> {
-  const supabase = getServerSupabase();
-  const admin = getServiceSupabase();
+  const client = admin();
 
-  const { data: convs, error: convError } = await supabase
+  const { data: convs, error: convError } = await client
     .from('conversations')
-    .select(
-      'id, traveler_id, host_id, last_message_text, last_message_at'
-    )
+    .select('id, traveler_id, host_id, last_message_text, last_message_at')
+    .or(`traveler_id.eq.${userId},host_id.eq.${userId}`)
     .order('last_message_at', { ascending: false });
 
   if (convError) throw convError;
@@ -176,7 +174,7 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
     }
   }
 
-  const { data: requests, error: requestsError } = await admin
+  const { data: requests, error: requestsError } = await client
     .from('stay_requests')
     .select(
       'id, traveler_id, host_id, message, created_at, conversation_id'
@@ -205,7 +203,7 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
 
   const profileMap = new Map<string, ProfileRow>();
   if (otherUserIds.size > 0) {
-    const { data: profiles, error: profilesError } = await admin
+    const { data: profiles, error: profilesError } = await client
       .from('profiles')
       .select('id, full_name, first_name, last_name, name, avatar_url')
       .in('id', Array.from(otherUserIds));
@@ -221,7 +219,7 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
 
   const unreadCounts: Record<string, number> = {};
   if ((convs ?? []).length > 0) {
-    const { data: unreadRows, error: unreadError } = await admin
+    const { data: unreadRows, error: unreadError } = await client
       .from('messages')
       .select('conversation_id')
       .in(
@@ -310,11 +308,9 @@ export async function getConversationWithMessages(
     throw new Error('forbidden');
   }
 
-  const supabase = getServerSupabase();
-  const admin = getServiceSupabase();
+  const client = admin();
 
-  // сами сообщения (юзер-клиент => RLS не даст левые чаты)
-  const { data: msgs, error: msgErr } = await supabase
+  const { data: msgs, error: msgErr } = await client
     .from('messages')
     .select('id, sender_id, text, created_at, read_at, edited_at, deleted_at')
     .eq('conversation_id', conversationId)
@@ -326,13 +322,13 @@ export async function getConversationWithMessages(
   const otherUserId =
     convRow.traveler_id === userId ? convRow.host_id : convRow.traveler_id;
 
-  const { data: meProfile } = await admin
+  const { data: meProfile } = await client
     .from('profiles')
     .select('id, full_name, first_name, last_name, name, avatar_url')
     .eq('id', userId)
     .maybeSingle();
 
-  const { data: otherProfile } = await admin
+  const { data: otherProfile } = await client
     .from('profiles')
     .select('id, full_name, first_name, last_name, name, avatar_url')
     .eq('id', otherUserId)
@@ -377,10 +373,9 @@ export async function sendMessage(
     throw new Error('forbidden');
   }
 
-  const supabase = getServiceSupabase();
+  const client = admin();
 
-  // вставляем сообщение (через сервисный клиент с ручной проверкой доступа)
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('chat_messages')
     .insert({
       room_id: conversationId,
@@ -411,9 +406,9 @@ export async function getMessagesForConversation(
     throw new Error('forbidden');
   }
 
-  const supabase = getServiceSupabase();
+  const client = admin();
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('chat_messages')
     .select('id, room_id, sender_id, content, created_at, edited_at')
     .eq('room_id', conversationId)
@@ -442,9 +437,9 @@ export async function markConversationRead(
     throw new Error('forbidden');
   }
 
-  const admin = getServiceSupabase();
+  const client = admin();
 
-  const { error } = await admin
+  const { error } = await client
     .from('messages')
     .update({ read_at: new Date().toISOString() })
     .eq('conversation_id', conversationId)
@@ -460,9 +455,9 @@ export async function ensureConversationForStayRequest(
   requestId: string,
   userId: string
 ) {
-  const admin = getServiceSupabase();
+  const client = admin();
 
-  const { data: request, error: requestError } = await admin
+  const { data: request, error: requestError } = await client
     .from('stay_requests')
     .select(
       'id, traveler_id, host_id, message, created_at, conversation_id'
@@ -484,7 +479,7 @@ export async function ensureConversationForStayRequest(
   let conversationId: string | null = request.conversation_id ?? null;
 
   if (!conversationId) {
-    const { data: existingConversation } = await admin
+    const { data: existingConversation } = await client
       .from('conversations')
       .select('id')
       .eq('traveler_id', request.traveler_id)
@@ -494,7 +489,7 @@ export async function ensureConversationForStayRequest(
     if (existingConversation?.id) {
       conversationId = existingConversation.id;
     } else {
-      const { data: newConversation, error: createError } = await admin
+      const { data: newConversation, error: createError } = await client
         .from('conversations')
         .insert({
           traveler_id: request.traveler_id,
@@ -506,7 +501,7 @@ export async function ensureConversationForStayRequest(
       if (createError) {
         if (createError.code === '23505') {
           const { data: conflictConversation, error: conflictError } =
-            await admin
+            await client
               .from('conversations')
               .select('id')
               .eq('traveler_id', request.traveler_id)
@@ -530,7 +525,7 @@ export async function ensureConversationForStayRequest(
       throw new Error('conversation_failed');
     }
 
-    const { error: updateError } = await admin
+    const { error: updateError } = await client
       .from('stay_requests')
       .update({ conversation_id: conversationId })
       .eq('id', request.id);
@@ -542,13 +537,13 @@ export async function ensureConversationForStayRequest(
     const trimmedMessage = request.message?.trim();
 
     if (trimmedMessage) {
-      const { count: existingMessages } = await admin
+      const { count: existingMessages } = await client
         .from('messages')
         .select('id', { count: 'exact', head: true })
         .eq('conversation_id', conversationId);
 
       if (!existingMessages || existingMessages === 0) {
-        await admin.from('messages').insert({
+        await client.from('messages').insert({
           conversation_id: conversationId,
           sender_id: request.traveler_id,
           text: trimmedMessage,
