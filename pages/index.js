@@ -29,13 +29,13 @@ const journeys = [
 
 export default function Home() {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [conversationId, setConversationId] = useState(null);
+  const [roomId, setRoomId] = useState(null);
   const [chatLoading, setChatLoading] = useState(false);
   const { user, loading: authLoading, hasSupabaseEnv } = useAuth();
 
   useEffect(() => {
     if (!user) {
-      setConversationId(null);
+      setRoomId(null);
       return;
     }
 
@@ -44,23 +44,23 @@ export default function Home() {
 
     (async () => {
       try {
-        const res = await fetch('/api/conversations', {
+        const res = await fetch('/api/rooms', {
           credentials: 'include',
         });
         if (!res.ok) {
-          throw new Error('Failed to load conversations');
+          throw new Error('Failed to load rooms');
         }
         const data = await res.json();
         if (!active) return;
-        const firstConversation = data?.conversations?.[0]
+        const firstRoom = data?.rooms?.[0]
           ?? (Array.isArray(data) ? data[0] : null);
-        const resolvedId = firstConversation?.conversationId
-          ?? firstConversation?.id
+        const resolvedId = firstRoom?.roomId
+          ?? firstRoom?.id
           ?? null;
-        setConversationId(resolvedId);
+        setRoomId(resolvedId);
       } catch (err) {
         if (active) {
-          setConversationId(null);
+          setRoomId(null);
         }
       } finally {
         if (active) {
@@ -105,9 +105,9 @@ export default function Home() {
               </div>
             ) : user ? (
               <div className="glass-strong flex flex-col gap-4 rounded-3xl p-6 text-sm text-fg/80">
-                {conversationId ? (
+                {roomId ? (
                   <div className="h-[420px] w-full max-w-3xl">
-                    <ChatWindow conversationId={conversationId} currentUserId={user?.id} />
+                    <ChatWindow roomId={roomId} currentUserId={user?.id} />
                   </div>
                 ) : (
                   <div className="text-sm text-fg/70">Нет активных диалогов.</div>

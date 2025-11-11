@@ -25,7 +25,7 @@ async function loadMessage(messageId: string) {
 
   const { data: message, error } = await client
     .from('messages')
-    .select('id, conversation_id, sender_id, text, created_at, edited_at, deleted_at')
+    .select('id, room_id, user_id, content, created_at')
     .eq('id', messageId)
     .maybeSingle();
 
@@ -36,7 +36,7 @@ async function loadMessage(messageId: string) {
   const { data: request, error: requestError } = await client
     .from('stay_requests')
     .select('id, traveler_id, host_id')
-    .eq('conversation_id', message.conversation_id)
+    .eq('room_id', message.room_id)
     .maybeSingle();
 
   if (requestError || !request) {
@@ -73,7 +73,7 @@ export async function PATCH(
 
   const participant =
     request.traveler_id === user.id || request.host_id === user.id;
-  if (!participant || message.sender_id !== user.id) {
+  if (!participant || message.user_id !== user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -81,9 +81,9 @@ export async function PATCH(
 
   const { data, error } = await client
     .from('messages')
-    .update({ text, edited_at: new Date().toISOString() })
+    .update({ content: text })
     .eq('id', params.messageId)
-    .select('id, conversation_id, sender_id, text, created_at, edited_at, deleted_at')
+    .select('id, room_id, user_id, content, created_at')
     .single();
 
   if (error || !data) {
@@ -114,7 +114,7 @@ export async function DELETE(
 
   const participant =
     request.traveler_id === user.id || request.host_id === user.id;
-  if (!participant || message.sender_id !== user.id) {
+  if (!participant || message.user_id !== user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

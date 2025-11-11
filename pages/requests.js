@@ -33,7 +33,7 @@ export default function RequestsPage() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeConversationId, setActiveConversationId] = useState(null);
+  const [activeRoomId, setActiveRoomId] = useState(null);
   const [activeParticipant, setActiveParticipant] = useState(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState('');
@@ -91,7 +91,7 @@ export default function RequestsPage() {
             message,
             status,
             created_at,
-            conversation_id,
+            room_id,
             traveler:traveler_id (
               id,
               first_name,
@@ -145,14 +145,14 @@ export default function RequestsPage() {
 
         const data = await response.json().catch(() => null);
 
-        if (!response.ok || !data?.conversationId) {
+        if (!response.ok || !data?.roomId) {
           throw new Error(data?.error ?? 'failed');
         }
-        setActiveConversationId(data.conversationId);
+        setActiveRoomId(data.roomId);
         setRequests((prev) =>
           prev.map((item) =>
             item.id === request.id
-              ? { ...item, conversation_id: data.conversationId }
+              ? { ...item, room_id: data.roomId }
               : item
           )
         );
@@ -277,7 +277,7 @@ export default function RequestsPage() {
                           onClick={() => handleOpenChat(request)}
                           className="inline-flex items-center justify-center rounded-full border border-[#003B32]/40 px-4 py-2 text-sm font-medium text-[#003B32] transition hover:border-[#003B32]/60 hover:bg-[#003B32]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#005C4B]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
                         >
-                          {request.conversation_id ? 'Открыть чат' : 'Создать чат'}
+                          {request.room_id ? 'Открыть чат' : 'Создать чат'}
                         </button>
                       </div>
                     </div>
@@ -300,12 +300,9 @@ export default function RequestsPage() {
               {chatError}
             </div>
           ) : null}
-          {activeConversationId ? (
+          {activeRoomId ? (
             <div className="h-[420px]">
-                <ChatWindow
-                  conversationId={activeConversationId}
-                  currentUserId={user?.id}
-                />
+              <ChatWindow roomId={activeRoomId} currentUserId={user?.id} />
             </div>
           ) : (
             <p className="text-xs text-fg/70">
@@ -316,7 +313,7 @@ export default function RequestsPage() {
       </div>
     );
   }, [
-    activeConversationId,
+    activeRoomId,
     activeParticipant,
     chatError,
     chatLoading,

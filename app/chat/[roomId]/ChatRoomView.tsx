@@ -5,9 +5,9 @@ import ChatWindow from '@/components/chat/ChatWindow';
 import { useAuth } from '@/components/AuthProvider';
 
 export default function ChatRoomView({
-  conversationId,
+  roomId,
 }: {
-  conversationId: string;
+  roomId: string;
 }) {
   const { user } = useAuth() as { user: User | null };
 
@@ -19,5 +19,5 @@ export default function ChatRoomView({
     );
   }
 
-  return <ChatWindow conversationId={conversationId} currentUserId={user.id} />;
+  return <ChatWindow roomId={roomId} currentUserId={user.id} />;
 }

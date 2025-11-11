@@ -26,7 +26,8 @@
     "strictNullChecks": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["*"]
+      "@/*": ["*"],
+      "swr": ["swr/index"]
     }
   },
   "include": [

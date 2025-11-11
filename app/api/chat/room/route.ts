@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { ensureChatRoom } from '@/lib/chatRooms';
+import { ensureRoomForStayRequest } from '@/lib/chatService';
 import { admin } from '@/lib/supabase/server';
 import type { Database } from '@/lib/supabase/types';
 
@@ -48,34 +48,15 @@ export async function GET(req: NextRequest) {
 
   const client = admin();
 
-  const { data: existingRoom, error: existingError } = await client
-    .from('chat_rooms')
-    .select('id, traveler_id, host_id, created_at')
-    .or(
-      `and(traveler_id.eq.${user.id},host_id.eq.${otherUserId}),and(traveler_id.eq.${otherUserId},host_id.eq.${user.id})`
-    )
-    .maybeSingle<{ id: string | null }>();
-
-  if (existingError) {
-    return NextResponse.json(
-      { error: existingError.message },
-      { status: 500 }
-    );
-  }
-
-  if (existingRoom?.id) {
-    return NextResponse.json({ roomId: existingRoom.id });
-  }
-
   const { data: requestRow, error: requestError } = await client
     .from('stay_requests')
-    .select('traveler_id, host_id, created_at')
+    .select('id, traveler_id, host_id, created_at, room_id')
     .or(
       `and(traveler_id.eq.${user.id},host_id.eq.${otherUserId}),and(traveler_id.eq.${otherUserId},host_id.eq.${user.id})`
     )
     .order('created_at', { ascending: true })
     .limit(1)
-    .maybeSingle<{ traveler_id: string | null; host_id: string | null }>();
+    .maybeSingle();
 
   if (requestError) {
     return NextResponse.json(
@@ -98,10 +79,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const room = await ensureChatRoom(
-    requestRow.traveler_id as string,
-    requestRow.host_id as string
-  );
+  const requestId = typeof requestRow.id === 'string' ? requestRow.id : null;
 
-  return NextResponse.json({ roomId: room.id });
+  if (!requestId) {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  }
+
+  const ensured = await ensureRoomForStayRequest(client, requestId);
+
+  if (!ensured) {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  }
+
+  return NextResponse.json({ roomId: ensured.roomId });
 }

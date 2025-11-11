@@ -1,6 +1,8 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+
+import { ensureRoomForStayRequest } from '@/lib/chatService';
 import { admin } from '@/lib/supabase/server';
 import type { Database } from '@/lib/supabase/types';
 
@@ -43,7 +45,7 @@ async function assertRequestParticipation(
 
   const { data, error } = await client
     .from('stay_requests')
-    .select('id, traveler_id, host_id, conversation_id')
+    .select('id, traveler_id, host_id, room_id')
     .eq('id', requestId)
     .maybeSingle();
 
@@ -63,44 +65,8 @@ async function assertRequestParticipation(
 
 type StayRequestIdentifiers = Pick<
   Database['public']['Tables']['stay_requests']['Row'],
-  'id' | 'traveler_id' | 'host_id' | 'conversation_id'
+  'id' | 'traveler_id' | 'host_id' | 'room_id'
 >;
-
-async function ensureConversationId(request: StayRequestIdentifiers) {
-  const client = admin();
-  if (request.conversation_id) {
-    return request.conversation_id;
-  }
-
-  const { data: created, error } = await client
-    .from('conversations')
-    .insert({
-      traveler_id: request.traveler_id,
-      host_id: request.host_id,
-    })
-    .select('id')
-    .single();
-
-  if (error || !created) {
-    throw new Error(error?.message ?? 'Unable to create conversation');
-  }
-
-  const conversationId = created.id;
-
-  await client
-    .from('stay_requests')
-    .update({ conversation_id: conversationId })
-    .eq('id', request.id);
-
-  await client
-    .from('conversation_bookings')
-    .upsert(
-      { booking_id: request.id, conversation_id: conversationId },
-      { onConflict: 'booking_id' }
-    );
-
-  return conversationId;
-}
 
 export async function POST(req: Request) {
   try {
@@ -127,17 +93,23 @@ export async function POST(req: Request) {
       return participation.error;
     }
 
-    const conversationId = await ensureConversationId(participation.request);
     const client = admin();
+    const ensured = await ensureRoomForStayRequest(client, participation.request.id);
+
+    if (!ensured) {
+      return NextResponse.json({ error: 'request_not_found' }, { status: 404 });
+    }
+
+    const { roomId } = ensured;
 
     const { data, error } = await client
       .from('messages')
       .insert({
-        conversation_id: conversationId,
-        sender_id: user.id,
-        text,
+        room_id: roomId,
+        user_id: user.id,
+        content: text,
       })
-      .select('id, conversation_id, sender_id, text, created_at, edited_at, deleted_at')
+      .select('id, room_id, user_id, content, created_at')
       .single();
 
     if (error || !data) {
@@ -149,7 +121,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(
       {
-        conversationId,
+        roomId,
         message: data,
       },
       { status: 200 }
@@ -182,12 +154,12 @@ export async function GET(req: Request) {
     const { limit, offset } = parsePagination(searchParams);
     const client = admin();
 
-    const conversationId = participation.request.conversation_id;
+    const roomId = participation.request.room_id;
 
-    if (!conversationId) {
+    if (!roomId) {
       return NextResponse.json(
         {
-          conversationId: null,
+          roomId: null,
           messages: [],
           pagination: { limit, offset, count: 0 },
         },
@@ -198,8 +170,8 @@ export async function GET(req: Request) {
     const rangeTo = offset + limit - 1;
     const { data, error } = await client
       .from('messages')
-      .select('id, conversation_id, sender_id, text, created_at, edited_at, deleted_at')
-      .eq('conversation_id', conversationId)
+      .select('id, room_id, user_id, content, created_at')
+      .eq('room_id', roomId)
       .order('created_at', { ascending: true })
       .range(offset, rangeTo);
 
@@ -212,7 +184,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json(
       {
-        conversationId,
+        roomId,
         messages: data ?? [],
         pagination: { limit, offset, count: data?.length ?? 0 },
       },

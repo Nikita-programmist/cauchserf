@@ -1,26 +1,25 @@
 import ChatWindow from '@/components/chat/ChatWindow';
 import ConversationList from '@/components/chat/ConversationList';
-import type { ConversationListItem } from '@/lib/chatService';
+import type { RoomListItem } from '@/lib/chatService';
 import { cn } from '@/lib/utils';
 
 type ChatPageClientProps = {
   currentUserId: string;
-  initialItems: ConversationListItem[];
+  initialItems: RoomListItem[];
   className?: string;
-  activeConversationId?: string | null;
+  activeRoomId?: string | null;
 };
 
 export default function ChatPageClient({
   currentUserId,
   initialItems,
   className,
-  activeConversationId,
+  activeRoomId,
 }: ChatPageClientProps) {
-  const firstConversation = initialItems.find((item) => item.conversationId);
-  const selectedConversationId = activeConversationId ?? firstConversation?.conversationId ?? null;
-  const selectedConversation = initialItems.find(
-    (item) => item.conversationId === selectedConversationId
-  );
+  const firstRoom = initialItems.find((item) => item.roomId);
+  const selectedRoomId = activeRoomId ?? firstRoom?.roomId ?? null;
+  const selectedRoom = initialItems.find((item) => item.roomId === selectedRoomId);
+  const primaryPeer = selectedRoom?.peers?.[0] ?? null;
 
   return (
     <div
@@ -29,37 +28,32 @@ export default function ChatPageClient({
         className
       )}
     >
-      <ConversationList items={initialItems} selectedConversationId={selectedConversationId} />
+      <ConversationList items={initialItems} selectedRoomId={selectedRoomId} />
       <div className="flex flex-1 flex-col">
-        {selectedConversationId ? (
+        {selectedRoomId ? (
           <ChatWindow
-            conversationId={selectedConversationId ?? null}
+            roomId={selectedRoomId ?? null}
             currentUserId={currentUserId}
             header={
-              selectedConversation ? (
+              selectedRoom && primaryPeer ? (
                 <div className="flex items-center gap-2">
                   <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-neutral-200 text-sm font-semibold text-neutral-600">
-                    {selectedConversation.otherUser.avatarUrl ? (
+                    {primaryPeer.avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={selectedConversation.otherUser.avatarUrl}
-                        alt={selectedConversation.otherUser.name ?? 'Собеседник'}
+                        src={primaryPeer.avatarUrl}
+                        alt={primaryPeer.name ?? 'Собеседник'}
                         className="h-full w-full object-cover"
                       />
                     ) : (
                       <span>
-                        {selectedConversation.otherUser.name?.charAt(0)?.toUpperCase() ?? 'U'}
+                        {primaryPeer.name?.charAt(0)?.toUpperCase() ?? 'U'}
                       </span>
                     )}
                   </div>
                   <div className="flex flex-col">
                     <span className="text-sm font-semibold text-neutral-900">
-                      {selectedConversation.otherUser.name ?? 'Собеседник'}
-                    </span>
-                    <span className="text-[11px] text-neutral-500">
-                      {selectedConversation.type === 'stay_request'
-                        ? 'заявка путешественника'
-                        : 'личный диалог'}
+                      {primaryPeer.name ?? 'Собеседник'}
                     </span>
                   </div>
                 </div>
