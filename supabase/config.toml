@@ -1,0 +1,8 @@
+[project]
+# Укажите project_ref вашего проекта Supabase при локальной настройке.
+ref = "${SUPABASE_PROJECT_ID:-your-project-ref}"
+
+[db]
+# Порты по умолчанию для локального запуска `supabase start`
+port = 54321
+shadow_port = 54322

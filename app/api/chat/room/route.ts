@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { ensureRoomForStayRequest } from '@/lib/chatService';
-import { admin } from '@/lib/supabase/server';
+import { getAdminSupabase } from '@/lib/supabaseAdmin';
 import type { Database } from '@/lib/supabase/types';
 
 export const runtime = 'nodejs';
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const client = admin();
+  const client = getAdminSupabase();
 
   const { data: requestRow, error: requestError } = await client
     .from('stay_requests')

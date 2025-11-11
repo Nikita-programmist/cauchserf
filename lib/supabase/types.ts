@@ -40,12 +40,49 @@ export type Database = {
           }
         ];
       };
+      applications: {
+        Row: {
+          id: string;
+          host_id: string;
+          guest_id: string;
+          listing_id: string | null;
+          message: string | null;
+          status: 'pending' | 'accepted' | 'declined' | 'cancelled';
+          created_at: string | null;
+          room_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          host_id: string;
+          guest_id: string;
+          listing_id?: string | null;
+          message?: string | null;
+          status?: 'pending' | 'accepted' | 'declined' | 'cancelled';
+          created_at?: string | null;
+          room_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          host_id?: string;
+          guest_id?: string;
+          listing_id?: string | null;
+          message?: string | null;
+          status?: 'pending' | 'accepted' | 'declined' | 'cancelled';
+          created_at?: string | null;
+          room_id?: string | null;
+        };
+        Relationships: [];
+      };
       stay_requests: {
         Row: {
           id: string;
           traveler_id: string;
           host_id: string;
+          listing_id: string | null;
+          start_date: string | null;
+          end_date: string | null;
           message: string | null;
+          status: string | null;
           created_at: string | null;
           room_id: string | null;
         };
@@ -53,7 +90,11 @@ export type Database = {
           id?: string;
           traveler_id: string;
           host_id: string;
+          listing_id?: string | null;
+          start_date?: string | null;
+          end_date?: string | null;
           message?: string | null;
+          status?: string | null;
           created_at?: string | null;
           room_id?: string | null;
         };
@@ -61,7 +102,11 @@ export type Database = {
           id?: string;
           traveler_id?: string;
           host_id?: string;
+          listing_id?: string | null;
+          start_date?: string | null;
+          end_date?: string | null;
           message?: string | null;
+          status?: string | null;
           created_at?: string | null;
           room_id?: string | null;
         };
@@ -135,27 +180,42 @@ export type Database = {
       profiles: {
         Row: {
           id: string;
-          full_name: string | null;
           first_name: string | null;
           last_name: string | null;
+          full_name: string | null;
           name: string | null;
           avatar_url: string | null;
+          city: string | null;
+          age: number | null;
+          gender: string | null;
+          bio: string | null;
+          role: string | null;
         };
         Insert: {
           id: string;
-          full_name?: string | null;
           first_name?: string | null;
           last_name?: string | null;
+          full_name?: string | null;
           name?: string | null;
           avatar_url?: string | null;
+          city?: string | null;
+          age?: number | null;
+          gender?: string | null;
+          bio?: string | null;
+          role?: string | null;
         };
         Update: {
           id?: string;
-          full_name?: string | null;
           first_name?: string | null;
           last_name?: string | null;
+          full_name?: string | null;
           name?: string | null;
           avatar_url?: string | null;
+          city?: string | null;
+          age?: number | null;
+          gender?: string | null;
+          bio?: string | null;
+          role?: string | null;
         };
         Relationships: [];
       };

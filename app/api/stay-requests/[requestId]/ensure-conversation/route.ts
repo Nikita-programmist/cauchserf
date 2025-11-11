@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { ensureRoomForStayRequest } from '@/lib/chatService';
-import { admin } from '@/lib/supabase/server';
+import { getAdminSupabase } from '@/lib/supabaseAdmin';
 import type { Database } from '@/lib/supabase/types';
 
 export const runtime = 'nodejs';
@@ -33,7 +33,7 @@ export async function POST(
   }
 
   try {
-    const client = admin();
+    const client = getAdminSupabase();
     const result = await ensureRoomForStayRequest(client, params.requestId);
 
     const { data: requestRow } = await client
