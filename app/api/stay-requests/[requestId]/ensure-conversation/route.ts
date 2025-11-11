@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { ensureConversationForStayRequest } from '@/lib/chatService';
+import { ensureRoomForStayRequest } from '@/lib/chatService';
 import { admin } from '@/lib/supabase/server';
 import type { Database } from '@/lib/supabase/types';
 
@@ -33,12 +33,9 @@ export async function POST(
   }
 
   try {
-    const result = await ensureConversationForStayRequest(
-      params.requestId,
-      user.id
-    );
-
     const client = admin();
+    const result = await ensureRoomForStayRequest(client, params.requestId);
+
     const { data: requestRow } = await client
       .from('stay_requests')
       .select('traveler_id, host_id')
@@ -80,18 +77,14 @@ export async function POST(
       };
     }
 
-    return NextResponse.json({
-      conversationId: result.conversationId,
-    });
-  } catch (err: any) {
-    if (err?.message === 'forbidden') {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-    }
-
-    if (err?.message === 'not_found') {
+    if (!result) {
       return NextResponse.json({ error: 'not_found' }, { status: 404 });
     }
 
+    return NextResponse.json({
+      roomId: result.roomId,
+    });
+  } catch (err: any) {
     return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }
 }

@@ -13,12 +13,13 @@ type Message = {
 export function useConversation(requestId: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [roomId, setRoomId] = useState<string | null>(null);
 
   const fetchMessages = useCallback(async () => {
     if (!requestId) {
       setMessages([]);
       setLoading(false);
+      setRoomId(null);
       return;
     }
     const params = new URLSearchParams({ requestId, limit: '100', offset: '0' });
@@ -30,8 +31,8 @@ export function useConversation(requestId: string | null) {
       return;
     }
     const data = await res.json();
-    if (typeof data?.conversationId === 'string') {
-      setConversationId(data.conversationId);
+    if (typeof data?.roomId === 'string') {
+      setRoomId(data.roomId);
     }
     const normalized = (Array.isArray(data?.messages) ? data.messages : []).map(
       (item: any) => ({
@@ -61,8 +62,8 @@ export function useConversation(requestId: string | null) {
     });
     if (res.ok) {
       const data = await res.json().catch(() => null);
-      if (data?.conversationId) {
-        setConversationId(data.conversationId);
+      if (data?.roomId) {
+        setRoomId(data.roomId);
       }
       if (data?.message) {
         const message = {
@@ -117,7 +118,7 @@ export function useConversation(requestId: string | null) {
   return {
     messages,
     loading,
-    conversationId,
+    roomId,
     sendMessage,
     editMessage,
     deleteMessage,

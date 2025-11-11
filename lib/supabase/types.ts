@@ -12,35 +12,33 @@ export type Database = {
       messages: {
         Row: {
           id: string;
-          conversation_id: string;
-          sender_id: string;
-          text: string;
+          room_id: string;
+          user_id: string | null;
+          content: string;
           created_at: string;
-          edited_at: string | null;
-          deleted_at: string | null;
-          read_at: string | null;
         };
         Insert: {
           id?: string;
-          conversation_id: string;
-          sender_id: string;
-          text: string;
+          room_id: string;
+          user_id?: string | null;
+          content: string;
           created_at?: string;
-          edited_at?: string | null;
-          deleted_at?: string | null;
-          read_at?: string | null;
         };
         Update: {
           id?: string;
-          conversation_id?: string;
-          sender_id?: string;
-          text?: string;
+          room_id?: string;
+          user_id?: string | null;
+          content?: string;
           created_at?: string;
-          edited_at?: string | null;
-          deleted_at?: string | null;
-          read_at?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: 'messages_room_id_fkey';
+            columns: ['room_id'];
+            referencedRelation: 'rooms';
+            referencedColumns: ['id'];
+          }
+        ];
       };
       stay_requests: {
         Row: {
@@ -49,7 +47,7 @@ export type Database = {
           host_id: string;
           message: string | null;
           created_at: string | null;
-          conversation_id: string | null;
+          room_id: string | null;
         };
         Insert: {
           id?: string;
@@ -57,7 +55,7 @@ export type Database = {
           host_id: string;
           message?: string | null;
           created_at?: string | null;
-          conversation_id?: string | null;
+          room_id?: string | null;
         };
         Update: {
           id?: string;
@@ -65,57 +63,16 @@ export type Database = {
           host_id?: string;
           message?: string | null;
           created_at?: string | null;
-          conversation_id?: string | null;
+          room_id?: string | null;
         };
-        Relationships: [];
-      };
-      conversations: {
-        Row: {
-          id: string;
-          traveler_id: string;
-          host_id: string;
-          created_at: string;
-          updated_at: string;
-          last_message_text: string | null;
-          last_message_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          traveler_id: string;
-          host_id: string;
-          created_at?: string;
-          updated_at?: string;
-          last_message_text?: string | null;
-          last_message_at?: string | null;
-        };
-        Update: {
-          id?: string;
-          traveler_id?: string;
-          host_id?: string;
-          created_at?: string;
-          updated_at?: string;
-          last_message_text?: string | null;
-          last_message_at?: string | null;
-        };
-        Relationships: [];
-      };
-      conversation_bookings: {
-        Row: {
-          booking_id: string;
-          conversation_id: string;
-          created_at: string;
-        };
-        Insert: {
-          booking_id: string;
-          conversation_id: string;
-          created_at?: string;
-        };
-        Update: {
-          booking_id?: string;
-          conversation_id?: string;
-          created_at?: string;
-        };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: 'stay_requests_room_id_fkey';
+            columns: ['room_id'];
+            referencedRelation: 'rooms';
+            referencedColumns: ['id'];
+          }
+        ];
       };
       bookings: {
         Row: {
@@ -135,62 +92,45 @@ export type Database = {
         };
         Relationships: [];
       };
-      chat_rooms: {
+      rooms: {
         Row: {
           id: string;
-          traveler_id: string;
-          host_id: string;
           created_at: string;
         };
         Insert: {
           id?: string;
-          traveler_id: string;
-          host_id: string;
           created_at?: string;
         };
         Update: {
           id?: string;
-          traveler_id?: string;
-          host_id?: string;
           created_at?: string;
         };
         Relationships: [];
       };
-      chat_messages: {
+      room_members: {
         Row: {
-          id: string;
           room_id: string;
-          sender_id: string;
-          content: string | null;
-          body: string | null;
-          created_at: string;
-          edited_at: string | null;
-          deleted_at: string | null;
-          read_at: string | null;
+          user_id: string;
+          role: string;
         };
         Insert: {
-          id?: string;
           room_id: string;
-          sender_id: string;
-          content?: string | null;
-          body?: string | null;
-          created_at?: string;
-          edited_at?: string | null;
-          deleted_at?: string | null;
-          read_at?: string | null;
+          user_id: string;
+          role?: string;
         };
         Update: {
-          id?: string;
           room_id?: string;
-          sender_id?: string;
-          content?: string | null;
-          body?: string | null;
-          created_at?: string;
-          edited_at?: string | null;
-          deleted_at?: string | null;
-          read_at?: string | null;
+          user_id?: string;
+          role?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: 'room_members_room_id_fkey';
+            columns: ['room_id'];
+            referencedRelation: 'rooms';
+            referencedColumns: ['id'];
+          }
+        ];
       };
       profiles: {
         Row: {

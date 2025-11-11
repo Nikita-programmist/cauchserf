@@ -1,7 +1,11 @@
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+
 import ChatPageClient from '@/components/ChatPageClient';
-import { listConversationsForUser } from '@/lib/chatService';
+import { listRoomsForUser } from '@/lib/chatService';
 import { getCurrentUser } from '@/lib/supabaseServer';
+import type { Database } from '@/lib/supabase/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +16,8 @@ export default async function ChatIndexPage() {
     redirect('/login?redirect=/chat');
   }
 
-  const conversations = await listConversationsForUser(currentUser.id);
+  const supabase = createServerComponentClient<Database>({ cookies });
+  const rooms = await listRoomsForUser(supabase as any, currentUser.id);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 pb-12 pt-8">
@@ -27,7 +32,7 @@ export default async function ChatIndexPage() {
       <div className="glass-strong flex h-[70vh] flex-col rounded-3xl">
         <ChatPageClient
           currentUserId={currentUser.id}
-          initialItems={conversations}
+          initialItems={rooms}
           className="flex-1"
         />
       </div>
