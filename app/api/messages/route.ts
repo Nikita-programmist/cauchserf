@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 import { ensureRoomForStayRequest } from '@/lib/chatService';
-import { admin } from '@/lib/supabase/server';
+import { getAdminSupabase } from '@/lib/supabaseAdmin';
 import type { Database } from '@/lib/supabase/types';
 
 export const runtime = 'nodejs';
@@ -41,7 +41,7 @@ async function assertRequestParticipation(
   requestId: string,
   userId: string
 ) {
-  const client = admin();
+  const client = getAdminSupabase();
 
   const { data, error } = await client
     .from('stay_requests')
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
       return participation.error;
     }
 
-    const client = admin();
+    const client = getAdminSupabase();
     const ensured = await ensureRoomForStayRequest(client, participation.request.id);
 
     if (!ensured) {
@@ -152,7 +152,7 @@ export async function GET(req: Request) {
     }
 
     const { limit, offset } = parsePagination(searchParams);
-    const client = admin();
+    const client = getAdminSupabase();
 
     const roomId = participation.request.room_id;
 

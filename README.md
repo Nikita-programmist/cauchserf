@@ -21,157 +21,40 @@ npm run dev
 
 Подробнее — см. [`docs/UX.md`](docs/UX.md).
 
-## CHAT SETUP
+## Supabase
 
-### Database SQL
+- Все изменения схемы оформляются миграциями в `supabase/migrations`. Для применения их локально используйте [Supabase CLI](https://supabase.com/docs/guides/cli). После установки выполните:
 
-В Supabase SQL Editor выполните следующий скрипт (адаптируйте имена таблиц, если у вас другой бэкенд бронирований):
+  ```bash
+  npm run db:push
+  ```
 
-> 💡 Чат привязан к заявке (`stay_requests`). Каждая запись `stay_requests.conversation_id` указывает на приватный диалог между `traveler_id` и `host_id`, а таблица `public.messages` хранит переписку в рамках этой заявки.
+- В CI настроен workflow `.github/workflows/supabase.yml`, который запускает `npx supabase db push` c секретами `SUPABASE_PROJECT_ID` и `SUPABASE_ACCESS_TOKEN`.
 
-```sql
-create table if not exists public.conversations (
-  id uuid primary key default gen_random_uuid(),
-  traveler_id uuid not null,
-  host_id uuid not null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  last_message_text text,
-  last_message_at timestamptz
-);
+- Минимальный набор переменных окружения для Next.js храните в `.env.local`:
 
-create table if not exists public.messages (
-  id uuid primary key default gen_random_uuid(),
-  conversation_id uuid not null references public.conversations(id) on delete cascade,
-  sender_id uuid not null,
-  text text not null,
-  created_at timestamptz not null default now(),
-  read_at timestamptz
-);
+  ```env
+  NEXT_PUBLIC_SUPABASE_URL=...
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+  SUPABASE_SERVICE_ROLE_KEY=... # только для серверных обработчиков
+  ```
 
-create index if not exists messages_sender_created_desc_idx on public.messages (sender_id, created_at desc);
+  `SUPABASE_SERVICE_ROLE_KEY` не должен попадать в браузерные бандлы или edge-функции.
 
-create table if not exists public.conversation_bookings (
-  booking_id uuid primary key references public.stay_requests(id) on delete cascade,
-  conversation_id uuid not null references public.conversations(id) on delete cascade,
-  created_at timestamptz not null default now()
-);
+## Проверка функциональности
 
-create index if not exists messages_conversation_created_desc_idx on public.messages (conversation_id, created_at desc);
-create index if not exists conversations_traveler_idx on public.conversations (traveler_id);
-create index if not exists conversations_host_idx on public.conversations (host_id);
-create index if not exists conversations_last_message_idx on public.conversations (last_message_at desc);
+1. Создайте двух пользователей в Supabase (хост и гость) и авторизуйтесь в разных браузерах.
+2. Гость отправляет заявку через `POST /api/applications` или через UI `/applications` во вкладке «Как гость».
+3. Хост открывает `/applications`, видит входящую заявку и может `Принять`/`Отклонить`.
+   - При принятии создаётся комната, оба участника получают доступ к чату и происходит редирект в `/chat/<roomId>`.
+   - При отклонении статус становится `Отклонена`.
+4. Гость может отменить свою заявку до решения хоста.
+5. В `/chat/<roomId>` сообщения загружаются через `/api/rooms/[roomId]/messages`, новые сообщения отправляются в realtime и появляются без перезагрузки.
 
-alter table public.conversations enable row level security;
-alter table public.messages enable row level security;
-alter table public.conversation_bookings enable row level security;
+## Тесты
 
-drop policy if exists "select_own_conversations" on public.conversations;
-create policy "select_own_conversations"
-  on public.conversations
-  for select
-  using (auth.uid() = traveler_id or auth.uid() = host_id);
-
-drop policy if exists "select_messages_in_my_conversations" on public.messages;
-create policy "select_messages_in_my_conversations"
-  on public.messages
-  for select
-  using (
-    exists (
-      select 1 from public.conversations c
-      where c.id = messages.conversation_id
-        and (c.traveler_id = auth.uid() or c.host_id = auth.uid())
-    )
-  );
-
-drop policy if exists "insert_messages_if_participant" on public.messages;
-create policy "insert_messages_if_participant"
-  on public.messages
-  for insert
-  with check (
-    exists (
-      select 1 from public.conversations c
-      where c.id = conversation_id
-        and (c.traveler_id = auth.uid() or c.host_id = auth.uid())
-    )
-    and sender_id = auth.uid()
-  );
-
-drop policy if exists "select_conversation_bookings_participant" on public.conversation_bookings;
-create policy "select_conversation_bookings_participant"
-  on public.conversation_bookings
-  for select
-  using (
-    exists (
-      select 1 from public.stay_requests sr
-      where sr.id = conversation_bookings.booking_id
-        and (sr.traveler_id = auth.uid() or sr.host_id = auth.uid())
-    )
-  );
-
-create or replace function public.set_conversation_updated_at()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.updated_at := now();
-  return new;
-end;
-$$;
-
-drop trigger if exists trg_set_conversation_updated_at on public.conversations;
-create trigger trg_set_conversation_updated_at
-before update on public.conversations
-for each row
-execute function public.set_conversation_updated_at();
-
-create or replace function public.update_conversation_after_message()
-returns trigger
-language plpgsql
-as $$
-begin
-  update public.conversations
-    set
-      updated_at = now(),
-      last_message_text = new.text,
-      last_message_at = new.created_at
-    where id = new.conversation_id;
-  return new;
-end;
-$$;
-
-drop trigger if exists trg_update_conversation_after_message on public.messages;
-create trigger trg_update_conversation_after_message
-after insert on public.messages
-for each row
-execute function public.update_conversation_after_message();
+```bash
+npm test
 ```
 
-### Environment
-
-Добавьте в `.env.local`:
-
-```
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
-```
-
-`SUPABASE_SERVICE_ROLE_KEY` храните только на серверной стороне (в route handlers, server actions и т.д.) и не импортируйте его в клиентские компоненты или браузерные скрипты.
-
-### Продакшн (Vercel) чек-лист
-
-1. В проекте Vercel откройте **Settings → Environment Variables** и убедитесь, что заданы:
-   - `NEXT_PUBLIC_SUPABASE_URL` (Production + Preview),
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Production + Preview),
-   - `SUPABASE_SERVICE_ROLE_KEY` (только сервер, помечен как `Encrypted`).
-2. После обновления любых переменных нажмите **Redeploy** для актуального деплоя (Deployments → Redeploy). Без этого новые ключи не попадут в рантайм.
-3. Проверьте в логах Vercel, что роут `/api/rooms/[id]/messages` отвечает 200/401/403 в зависимости от доступа.
-
-### Локальный запуск и проверка
-
-1. `npm install` и `npm run dev`.
-2. В Supabase создайте двух тестовых пользователей (Traveler и Host).
-3. Добавьте запись в `stay_requests` с `traveler_id` и `host_id` тестовых пользователей и статусом `pending`.
-4. Авторизуйтесь в двух браузерах разными пользователями, откройте `/chat/<roomId>`.
-5. Отправляйте сообщения и убедитесь, что они появляются в реальном времени без перезагрузки.
+В тестах `tests/applications.test.ts` покрыты сценарии загрузки заявок и принятия заявки с созданием комнаты.

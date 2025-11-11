@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { admin } from '@/lib/supabase/server';
+import { getAdminSupabase } from '@/lib/supabaseAdmin';
 import type { Database } from '@/lib/supabase/types';
 
 export const runtime = 'nodejs';
@@ -21,7 +21,7 @@ async function getAuthUser() {
 }
 
 async function loadMessage(messageId: string) {
-  const client = admin();
+  const client = getAdminSupabase();
 
   const { data: message, error } = await client
     .from('messages')
@@ -77,7 +77,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const client = admin();
+  const client = getAdminSupabase();
 
   const { data, error } = await client
     .from('messages')
@@ -118,7 +118,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const client = admin();
+  const client = getAdminSupabase();
 
   const { error } = await client
     .from('messages')
