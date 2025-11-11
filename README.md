@@ -27,6 +27,8 @@ npm run dev
 
 В Supabase SQL Editor выполните следующий скрипт (адаптируйте имена таблиц, если у вас другой бэкенд бронирований):
 
+> 💡 Чат привязан к заявке (`stay_requests`). Каждая запись `stay_requests.conversation_id` указывает на приватный диалог между `traveler_id` и `host_id`, а таблица `public.messages` хранит переписку в рамках этой заявки.
+
 ```sql
 create table if not exists public.conversations (
   id uuid primary key default gen_random_uuid(),
@@ -47,13 +49,15 @@ create table if not exists public.messages (
   read_at timestamptz
 );
 
+create index if not exists messages_sender_created_desc_idx on public.messages (sender_id, created_at desc);
+
 create table if not exists public.conversation_bookings (
   booking_id uuid primary key references public.stay_requests(id) on delete cascade,
   conversation_id uuid not null references public.conversations(id) on delete cascade,
   created_at timestamptz not null default now()
 );
 
-create index if not exists messages_conversation_created_idx on public.messages (conversation_id, created_at);
+create index if not exists messages_conversation_created_desc_idx on public.messages (conversation_id, created_at desc);
 create index if not exists conversations_traveler_idx on public.conversations (traveler_id);
 create index if not exists conversations_host_idx on public.conversations (host_id);
 create index if not exists conversations_last_message_idx on public.conversations (last_message_at desc);
@@ -154,6 +158,15 @@ SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` храните только на серверной стороне (в route handlers, server actions и т.д.) и не импортируйте его в клиентские компоненты или браузерные скрипты.
+
+### Продакшн (Vercel) чек-лист
+
+1. В проекте Vercel откройте **Settings → Environment Variables** и убедитесь, что заданы:
+   - `NEXT_PUBLIC_SUPABASE_URL` (Production + Preview),
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Production + Preview),
+   - `SUPABASE_SERVICE_ROLE_KEY` (только сервер, помечен как `Encrypted`).
+2. После обновления любых переменных нажмите **Redeploy** для актуального деплоя (Deployments → Redeploy). Без этого новые ключи не попадут в рантайм.
+3. Проверьте в логах Vercel, что роуты `/api/conversations/[id]/messages` и `/api/conversations/[id]/send` отвечают 200/401/403 в зависимости от доступа.
 
 ### Локальный запуск и проверка
 
