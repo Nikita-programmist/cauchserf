@@ -3,6 +3,8 @@ import ChatPageClient from '@/components/ChatPageClient';
 import { listConversationsForUser } from '@/lib/chatService';
 import { getCurrentUser } from '@/lib/supabaseServer';
 
+export const dynamic = 'force-dynamic';
+
 export default async function ChatIndexPage() {
   const currentUser = await getCurrentUser();
 

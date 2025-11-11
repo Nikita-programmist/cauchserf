@@ -7,14 +7,17 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useRouter } from "next/navigation";
+
 import { useRealtimeConversation } from "@/hooks/useRealtimeConversation";
 
 type Message = {
   id: string;
-  content: string;
+  text: string;
   sender_id: string;
   created_at: string;
   edited_at: string | null;
+  optimistic?: boolean;
 };
 
 function normalizeMessage(input: any): Message | null {
@@ -32,33 +35,34 @@ function normalizeMessage(input: any): Message | null {
     return null;
   }
 
+  const createdAtRaw = input.created_at ?? input.createdAt ?? null;
   const createdAt =
-    typeof input.created_at === "string"
-      ? input.created_at
-      : typeof input.createdAt === "string"
-      ? input.createdAt
+    typeof createdAtRaw === "string"
+      ? createdAtRaw
+      : createdAtRaw instanceof Date
+      ? createdAtRaw.toISOString()
       : new Date().toISOString();
 
-  const rawEdited = input.edited_at ?? input.editedAt ?? null;
+  const editedRaw = input.edited_at ?? input.editedAt ?? null;
   const editedAt =
-    typeof rawEdited === "string"
-      ? rawEdited
-      : rawEdited instanceof Date
-      ? rawEdited.toISOString()
+    typeof editedRaw === "string"
+      ? editedRaw
+      : editedRaw instanceof Date
+      ? editedRaw.toISOString()
       : null;
 
-  const content =
-    typeof input.content === "string"
-      ? input.content
-      : typeof input.text === "string"
+  const text =
+    typeof input.text === "string"
       ? input.text
+      : typeof input.content === "string"
+      ? input.content
       : typeof input.body === "string"
       ? input.body
       : "";
 
   return {
     id,
-    content,
+    text,
     sender_id: senderId,
     created_at: createdAt,
     edited_at: editedAt,
@@ -83,53 +87,66 @@ function removeMessage(list: Message[], id: string) {
 
 type ChatWindowProps = {
   conversationId: string | null;
-  requestId?: string | null;
   currentUserId?: string;
   header?: ReactNode;
 };
 
+type AuthIssue = "none" | "unauthorized" | "forbidden";
+
+const MESSAGE_LIMIT = 50;
+
 export default function ChatWindow({
   conversationId,
-  requestId,
   currentUserId,
   header,
 }: ChatWindowProps) {
-  const participant = null as {
-    id: string;
-    name?: string;
-    avatar_url?: string | null;
-  } | null;
+  const router = useRouter();
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
-    conversationId ?? null
+    conversationId ?? null,
   );
-
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
+  const [authIssue, setAuthIssue] = useState<AuthIssue>("none");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    setActiveConversationId(conversationId ?? null);
+  }, [conversationId]);
 
   const fetchMessages = useCallback(async (id: string) => {
-    const params = new URLSearchParams({ requestId: id, limit: "100", offset: "0" });
-    const res = await fetch(`/api/messages?${params.toString()}`, {
-      credentials: "include",
-    });
+    const res = await fetch(
+      `/api/conversations/${id}/messages?limit=${MESSAGE_LIMIT}`,
+      {
+        credentials: "include",
+      },
+    );
 
     const data = await res.json().catch(() => null);
 
+    if (res.status === 401) {
+      setAuthIssue("unauthorized");
+      throw new Error("unauthorized");
+    }
+
+    if (res.status === 403) {
+      setAuthIssue("forbidden");
+      throw new Error("forbidden");
+    }
+
     if (!res.ok || !data) {
+      setAuthIssue("none");
       throw new Error(
-        (data && typeof data.error === "string" ? data.error : null) ??
-          "failed"
+        typeof data?.error === "string" ? data.error : "failed",
       );
     }
 
-    if (typeof data?.conversationId === "string") {
-      setActiveConversationId(data.conversationId);
-    }
+    setAuthIssue("none");
 
-    const normalized = (Array.isArray(data?.messages) ? data.messages : [])
+    const normalized = (Array.isArray(data?.items) ? data.items : [])
       .map((item: any) => normalizeMessage(item))
       .filter((item): item is Message => Boolean(item));
 
@@ -139,55 +156,60 @@ export default function ChatWindow({
   }, []);
 
   useEffect(() => {
-    if (!requestId) {
+    let active = true;
+
+    if (!conversationId) {
+      setActiveConversationId(null);
       setMessages([]);
-      setError(null);
-      setSubmitError(null);
-      setText("");
-      setPending(false);
-      setActiveConversationId(conversationId ?? null);
+      setAuthIssue("none");
       setLoading(false);
+      setLoadError(null);
       return;
     }
 
-    let active = true;
-
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     setSubmitError(null);
-    setText("");
-    setPending(false);
 
-    (async () => {
-      try {
-        const normalized = await fetchMessages(requestId);
+    fetchMessages(conversationId)
+      .then((normalized) => {
         if (!active) return;
+        setActiveConversationId(conversationId);
         setMessages(normalized);
-        setError(null);
-      } catch (err) {
+      })
+      .catch((err) => {
         if (!active) return;
-        setMessages([]);
-        setError("Не удалось загрузить сообщения. Попробуйте позже.");
-      } finally {
+        if (
+          err instanceof Error &&
+          (err.message === "unauthorized" || err.message === "forbidden")
+        ) {
+          setMessages([]);
+          setLoadError(null);
+        } else {
+          setMessages([]);
+          setLoadError("Не удалось загрузить сообщения. Попробуйте позже.");
+        }
+      })
+      .finally(() => {
         if (active) {
           setLoading(false);
         }
-      }
-    })();
+      });
 
     return () => {
       active = false;
     };
-  }, [conversationId, requestId, fetchMessages]);
+  }, [conversationId, fetchMessages, reloadKey]);
+
+  const handleRetry = useCallback(() => {
+    if (!pending) {
+      setReloadKey((prev) => prev + 1);
+    }
+  }, [pending]);
 
   const handleRealtimeInsert = useCallback(
     (payload: any) => {
       if (!activeConversationId) {
-        return;
-      }
-
-      if (payload?.deleted_at) {
-        setMessages((prev) => removeMessage(prev, payload.id));
         return;
       }
 
@@ -203,7 +225,7 @@ export default function ChatWindow({
         setMessages((prev) => upsertMessage(prev, message));
       }
     },
-    [activeConversationId]
+    [activeConversationId],
   );
 
   const handleRealtimeUpdate = useCallback(
@@ -212,15 +234,15 @@ export default function ChatWindow({
         return;
       }
 
-      if (payload?.deleted_at) {
-        setMessages((prev) => removeMessage(prev, payload.id));
-        return;
-      }
-
       if (
         payload?.conversation_id &&
         payload.conversation_id !== activeConversationId
       ) {
+        return;
+      }
+
+      if (payload?.deleted_at) {
+        setMessages((prev) => removeMessage(prev, payload.id));
         return;
       }
 
@@ -229,7 +251,7 @@ export default function ChatWindow({
         setMessages((prev) => upsertMessage(prev, message));
       }
     },
-    [activeConversationId]
+    [activeConversationId],
   );
 
   const realtimeConversationId = activeConversationId ?? "__none__";
@@ -237,95 +259,132 @@ export default function ChatWindow({
   useRealtimeConversation(
     realtimeConversationId,
     handleRealtimeInsert,
-    handleRealtimeUpdate
+    handleRealtimeUpdate,
   );
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
+    if (!conversationId) {
+      return;
+    }
+
     const value = text.trim();
-    if (!value || pending || !requestId) return;
+    if (!value || pending) return;
 
     setPending(true);
     setSubmitError(null);
 
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage: Message = {
+      id: tempId,
+      sender_id: currentUserId ?? "optimistic",
+      text: value,
+      created_at: new Date().toISOString(),
+      edited_at: null,
+      optimistic: true,
+    };
+
+    setMessages((prev) => upsertMessage(prev, optimisticMessage));
+
+    let authError = false;
+
     try {
-      const res = await fetch(`/api/messages`, {
+      const res = await fetch(`/api/conversations/${conversationId}/send`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({ requestId, text: value }),
+        body: JSON.stringify({ text: value }),
       });
 
       const data = await res.json().catch(() => null);
 
-      if (!res.ok || !data?.message) {
-        setSubmitError("Не удалось отправить");
-        throw new Error(data?.error ?? "failed");
+      if (res.status === 401) {
+        authError = true;
+        setAuthIssue("unauthorized");
+        throw new Error("unauthorized");
       }
 
-      if (typeof data?.conversationId === "string") {
-        setActiveConversationId(data.conversationId);
+      if (res.status === 403) {
+        authError = true;
+        setAuthIssue("forbidden");
+        throw new Error("forbidden");
       }
+
+      if (!res.ok || !data?.message) {
+        setAuthIssue("none");
+        throw new Error(
+          typeof data?.error === "string" ? data.error : "failed",
+        );
+      }
+
+      setAuthIssue("none");
 
       const normalized = normalizeMessage(data.message);
-      if (normalized) {
-        setMessages((prev) => upsertMessage(prev, normalized));
-      }
+
+      setMessages((prev) => {
+        const withoutTemp = removeMessage(prev, tempId);
+        return normalized ? upsertMessage(withoutTemp, normalized) : withoutTemp;
+      });
 
       setText("");
     } catch (err) {
-      setSubmitError("Не удалось отправить");
+      setMessages((prev) => removeMessage(prev, tempId));
+      if (!authError) {
+        setSubmitError(
+          "Не удалось отправить сообщение. Попробуйте ещё раз.",
+        );
+      }
     } finally {
       setPending(false);
     }
-  };
+  }, [conversationId, currentUserId, pending, text]);
 
-  const headerContent = useMemo(() => {
-    if (header) {
-      return header;
-    }
+  const headerContent = useMemo(() => header ?? null, [header]);
 
-    if (!participant) {
-      return null;
-    }
-
-    const participantName =
-      typeof participant.name === "string" && participant.name.trim().length > 0
-        ? participant.name.trim()
-        : "Собеседник";
-    const initials = participantName.charAt(0).toUpperCase();
-
+  if (!conversationId) {
     return (
-      <div className="flex items-center gap-3">
-        <div className="h-10 w-10 overflow-hidden rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
-          {participant.avatar_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={participant.avatar_url}
-              alt={participantName}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              {initials || "🙂"}
-            </div>
-          )}
-        </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-semibold text-slate-900">
-            {participantName}
-          </span>
-          <span className="text-xs text-slate-500">Личные сообщения</span>
+      <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white/50 p-6 text-center text-sm text-slate-500">
+        Выберите чат, чтобы начать переписку
+      </div>
+    );
+  }
+
+  if (authIssue === "unauthorized") {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-600">
+        <p>Чтобы продолжить переписку, пожалуйста, войдите в аккаунт.</p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => router.push("/auth")}
+            className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500"
+          >
+            Войти
+          </button>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+          >
+            Повторить
+          </button>
         </div>
       </div>
     );
-  }, [header, participant]);
+  }
 
-  if (!requestId) {
+  if (authIssue === "forbidden") {
     return (
-      <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white/50 p-6 text-center text-sm text-slate-500">
-        Выберите заявку, чтобы начать переписку
+      <div className="flex h-full flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-600">
+        <p>Нет доступа к этой переписке.</p>
+        <button
+          type="button"
+          onClick={handleRetry}
+          className="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+        >
+          Повторить
+        </button>
       </div>
     );
   }
@@ -340,8 +399,17 @@ export default function ChatWindow({
       <div className="flex-1 space-y-2 overflow-y-auto bg-white p-4">
         {loading ? (
           <p className="text-sm text-slate-400">Загружаем сообщения…</p>
-        ) : error ? (
-          <p className="text-sm text-red-500">{error}</p>
+        ) : loadError ? (
+          <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            <p>{loadError}</p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="self-start rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
+            >
+              Повторить
+            </button>
+          </div>
         ) : messages.length === 0 ? (
           <p className="text-sm text-slate-400">Пока нет сообщений</p>
         ) : (
@@ -358,9 +426,9 @@ export default function ChatWindow({
                     isOwn
                       ? "bg-emerald-600 text-white"
                       : "bg-slate-100 text-slate-900"
-                  }`}
+                  } ${m.optimistic ? "opacity-70" : ""}`}
                 >
-                  <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                  <p className="whitespace-pre-wrap break-words">{m.text}</p>
                   {m.edited_at ? (
                     <span
                       className={`mt-1 block text-[10px] ${
@@ -391,13 +459,14 @@ export default function ChatWindow({
               }
             }}
             placeholder="Написать сообщение"
-            className="flex-1 rounded-full border border-slate-200 px-4 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+            disabled={pending}
+            className="flex-1 rounded-full border border-slate-200 px-4 py-2 text-sm focus:border-emerald-500 focus:outline-none disabled:opacity-60"
           />
           <button
             type="button"
             onClick={handleSend}
-            disabled={pending}
-            className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-60"
+            disabled={pending || text.trim().length === 0}
+            className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Отправить
           </button>

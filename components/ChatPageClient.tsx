@@ -34,7 +34,6 @@ export default function ChatPageClient({
         {selectedConversationId ? (
           <ChatWindow
             conversationId={selectedConversationId ?? null}
-            requestId={selectedConversation?.requestId ?? null}
             currentUserId={currentUserId}
             header={
               selectedConversation ? (

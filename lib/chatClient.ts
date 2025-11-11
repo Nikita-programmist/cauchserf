@@ -1,10 +1,11 @@
-export async function sendChatMessage(requestId: string, text: string) {
-  const response = await fetch(`/api/messages`, {
+export async function sendChatMessage(conversationId: string, text: string) {
+  const response = await fetch(`/api/conversations/${conversationId}/send`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ requestId, text })
+    credentials: 'include',
+    body: JSON.stringify({ text }),
   });
 
   if (!response.ok) {

@@ -7,6 +7,9 @@ import type { Database } from '@/lib/supabase/types';
 
 export const runtime = 'nodejs';
 
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 100;
+
 async function getAuthUser() {
   const client = createRouteHandlerClient<Database>({ cookies });
 
@@ -35,7 +38,10 @@ async function requireConversationParticipant(
     .maybeSingle();
 
   if (error) {
-    console.error('[api/conversations/[id]/send] failed to load conversation', error);
+    console.error(
+      '[api/conversations/[id]/messages] failed to load conversation',
+      error
+    );
     return {
       error: NextResponse.json({ error: 'server_error' }, { status: 500 }),
     };
@@ -59,7 +65,15 @@ async function requireConversationParticipant(
   return { conversation: data };
 }
 
-export async function POST(
+function parseLimit(raw: string | null) {
+  const value = Number(raw);
+  if (Number.isFinite(value)) {
+    return Math.min(Math.max(1, Math.trunc(value)), MAX_LIMIT);
+  }
+  return DEFAULT_LIMIT;
+}
+
+export async function GET(
   req: Request,
   { params }: { params: { conversationId: string } }
 ) {
@@ -74,12 +88,9 @@ export async function POST(
     return NextResponse.json({ error: 'conversation_id_missing' }, { status: 400 });
   }
 
-  const payload = await req.json().catch(() => null);
-  const rawText = typeof payload?.text === 'string' ? payload.text.trim() : '';
-
-  if (rawText.length === 0 || rawText.length > 2000) {
-    return NextResponse.json({ error: 'validation_failed' }, { status: 400 });
-  }
+  const { searchParams } = new URL(req.url);
+  const limit = parseLimit(searchParams.get('limit'));
+  const cursor = searchParams.get('cursor');
 
   const participation = await requireConversationParticipant(
     conversationId,
@@ -91,23 +102,32 @@ export async function POST(
 
   const client = admin();
 
-  const { data, error } = await client
+  const fetchLimit = limit + 1;
+  let query = client
     .from('messages')
-    .insert({
-      conversation_id: conversationId,
-      sender_id: user.id,
-      text: rawText,
-    })
     .select('id, conversation_id, sender_id, text, created_at')
-    .single();
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: false })
+    .limit(fetchLimit);
 
-  if (error || !data) {
-    console.error('[api/conversations/[id]/send] failed to insert message', error);
-    return NextResponse.json(
-      { error: 'server_error' },
-      { status: 500 }
-    );
+  if (cursor) {
+    query = query.lt('created_at', cursor);
   }
 
-  return NextResponse.json({ message: data }, { status: 200 });
+  const { data, error } = await query;
+
+  if (error) {
+    console.error(
+      '[api/conversations/[id]/messages] failed to load messages',
+      error
+    );
+    return NextResponse.json({ error: 'server_error' }, { status: 500 });
+  }
+
+  const rows = data ?? [];
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? items[items.length - 1]?.created_at ?? null : null;
+
+  return NextResponse.json({ items, nextCursor }, { status: 200 });
 }
