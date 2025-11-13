@@ -15,4 +15,6 @@ export function getSupabaseClient(): BrowserSupabaseClient | null {
   return cachedClient;
 }
 
-export const supabase: BrowserSupabaseClient = getBrowserSupabase();
+export const supabase: BrowserSupabaseClient | null = hasSupabaseEnv
+  ? getBrowserSupabase()
+  : null;

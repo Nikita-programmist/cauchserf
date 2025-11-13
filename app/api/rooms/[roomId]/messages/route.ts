@@ -1,27 +1,16 @@
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
+import { getRouteHandlerSupabase } from '@/lib/supabaseServer';
 import type { Database } from '@/lib/supabase/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-async function getAuthUser() {
-  const supabase = createRouteHandlerClient<Database>({ cookies });
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    return { supabase, user: null } as const;
-  }
-
-  return { supabase, user } as const;
-}
-
-async function ensureMembership(supabase: any, roomId: string, userId: string) {
+async function ensureMembership(
+  supabase: ReturnType<typeof getRouteHandlerSupabase>,
+  roomId: string,
+  userId: string
+) {
   const { data, error } = await supabase
     .from('room_members')
     .select('room_id')
@@ -54,7 +43,10 @@ export async function GET(
     return NextResponse.json({ error: 'roomId_required' }, { status: 400 });
   }
 
-  const { supabase, user } = await getAuthUser();
+  const supabase = getRouteHandlerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) {
     console.warn(`[GET /api/rooms/${roomId}/messages] unauthorized request`);
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -98,7 +90,10 @@ export async function POST(
     return NextResponse.json({ error: 'roomId_required' }, { status: 400 });
   }
 
-  const { supabase, user } = await getAuthUser();
+  const supabase = getRouteHandlerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) {
     console.warn(`[POST /api/rooms/${roomId}/messages] unauthorized request`);
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -125,11 +120,13 @@ export async function POST(
 
     const { data, error } = await supabase
       .from('messages')
-      .insert({
-        room_id: roomId,
-        user_id: user.id,
-        content,
-      })
+      .insert(
+        {
+          room_id: roomId,
+          user_id: user.id,
+          content,
+        } satisfies Database['public']['Tables']['messages']['Insert']
+      )
       .select('id, room_id, user_id, content, created_at')
       .single();
 

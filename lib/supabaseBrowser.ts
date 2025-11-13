@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { Database } from '@/lib/supabase/types';
 
-export type BrowserSupabaseClient = SupabaseClient<Database>;
+export type BrowserSupabaseClient = SupabaseClient<Database, any, any, any>;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -19,7 +19,7 @@ export function getBrowserSupabase(): BrowserSupabaseClient {
     if (!supabaseUrl || !supabaseAnonKey) {
       throw new Error('Supabase environment variables are not configured.');
     }
-    browserClient = createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
+    browserClient = createBrowserClient<Database>(supabaseUrl, supabaseAnonKey) as unknown as BrowserSupabaseClient;
   }
   return browserClient;
 }

@@ -1,87 +1,37 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { getAdminSupabase } from '@/lib/supabaseAdmin';
 import type { Database } from '@/lib/supabase/types';
 
-type RoomMemberInsert = Database['public']['Tables']['room_members'] extends { Insert: infer I }
-  ? I
-  : never;
+type TypedSupabase = SupabaseClient<Database, any, any, any>;
+type RoomRole = Database['public']['Enums']['room_role'];
+type RoomMemberInsert = Database['public']['Tables']['room_members']['Insert'];
 
 export type RoomMemberProfile = {
   id: string;
-  name: string;
+  name: string | null;
   avatarUrl: string | null;
 };
 
 export type RoomListItem = {
   id: string;
   roomId: string;
-  role: string;
-  lastMessageText: string;
+  role: RoomRole;
+  lastMessageText: string | null;
   lastMessageAt: string | null;
   peers: RoomMemberProfile[];
 };
 
-export async function ensureRoomForApplication(
-  supabase: SupabaseClient<Database, 'public'>,
-  applicationId: string
-): Promise<{ roomId: string; guestId: string; hostId: string } | null> {
-  const { data: application, error } = await supabase
-    .from('applications')
-    .select('id, guest_id, host_id, room_id')
-    .eq('id', applicationId)
-    .maybeSingle();
-
-  if (error || !application) {
-    return null;
-  }
-
-  let roomId = application.room_id;
-
-  if (!roomId) {
-    const { data: inserted, error: insertError } = await supabase
-      .from('rooms')
-      .insert({})
-      .select('id')
-      .single();
-
-    if (insertError || !inserted) {
-      throw insertError ?? new Error('failed to create room');
-    }
-
-    roomId = inserted.id;
-
-    await supabase
-      .from('applications')
-      .update({ room_id: roomId })
-      .eq('id', application.id);
-  }
-
-  const members: RoomMemberInsert[] = [
-    { room_id: roomId, user_id: application.guest_id, role: 'guest' },
-    { room_id: roomId, user_id: application.host_id, role: 'host' },
-  ];
-
-  await supabase
-    .from('room_members')
-    .upsert(members, { onConflict: 'room_id,user_id' });
-
-  return { roomId, guestId: application.guest_id, hostId: application.host_id };
-}
-
-function resolveProfileName(profile: {
-  full_name: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  name: string | null;
-} | null, fallback: string): string {
+function resolveProfileName(
+  profile: Pick<
+    Database['public']['Tables']['profiles']['Row'],
+    'full_name' | 'first_name' | 'last_name' | 'name'
+  > | null,
+  fallback: string
+): string {
   if (!profile) return fallback;
 
-  const {
-    full_name: fullName,
-    first_name: firstName,
-    last_name: lastName,
-    name,
-  } = profile;
+  const { full_name: fullName, first_name: firstName, last_name: lastName, name } = profile;
 
   if (fullName && fullName.trim()) return fullName.trim();
 
@@ -97,14 +47,78 @@ function resolveProfileName(profile: {
   return fallback;
 }
 
+async function ensureRoomExists(
+  supabase: TypedSupabase,
+  existingRoomId: string | null
+): Promise<string> {
+  if (existingRoomId) {
+    return existingRoomId;
+  }
+
+  const { data, error } = await supabase.from('rooms').insert({}).select('id').single();
+
+  if (error || !data) {
+    throw error ?? new Error('failed_to_create_room');
+  }
+
+  return data.id;
+}
+
+async function upsertMembers(
+  supabase: TypedSupabase,
+  members: RoomMemberInsert[]
+): Promise<void> {
+  if (members.length === 0) return;
+
+  const { error } = await supabase
+    .from('room_members')
+    .upsert(members satisfies RoomMemberInsert[], { onConflict: 'room_id,user_id' });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function ensureRoomForApplication(
+  supabase: TypedSupabase,
+  applicationId: string
+): Promise<{ roomId: string; guestId: string; hostId: string } | null> {
+  const { data: application, error } = await supabase
+    .from('applications')
+    .select('id, guest_id, host_id, room_id')
+    .eq('id', applicationId)
+    .maybeSingle();
+
+  if (error || !application) {
+    return null;
+  }
+
+  const admin = getAdminSupabase();
+  const roomId = await ensureRoomExists(admin, application.room_id);
+
+  if (roomId !== application.room_id) {
+    await admin.from('applications').update({ room_id: roomId }).eq('id', application.id);
+  }
+
+  const members: RoomMemberInsert[] = [
+    { room_id: roomId, user_id: application.guest_id, role: 'guest' },
+    { room_id: roomId, user_id: application.host_id, role: 'host' },
+  ];
+
+  await upsertMembers(admin, members);
+
+  return { roomId, guestId: application.guest_id, hostId: application.host_id };
+}
+
 export async function listRoomsForUser(
-  supabase: SupabaseClient<any>,
+  supabase: TypedSupabase,
   userId: string
 ): Promise<RoomListItem[]> {
   const { data: memberships, error: membershipError } = await supabase
     .from('room_members')
     .select('room_id, role')
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .order('room_id');
 
   if (membershipError) {
     throw membershipError;
@@ -139,20 +153,11 @@ export async function listRoomsForUser(
     throw profilesError;
   }
 
-  type ProfileRow = {
-    id: string;
-    full_name: string | null;
-    first_name: string | null;
-    last_name: string | null;
-    name: string | null;
-    avatar_url: string | null;
-  };
-
-  const profileMap = new Map<string, ProfileRow>(
-    (profiles ?? []).map((profile) => [profile.id, profile] as [string, ProfileRow])
+  const profileMap = new Map(
+    (profiles ?? []).map((profile) => [profile.id, profile] as const)
   );
 
-  const lastMessageMap = new Map<string, { text: string; created_at: string }>();
+  const lastMessageMap = new Map<string, { content: string | null; created_at: string }>();
 
   await Promise.all(
     roomIds.map(async (roomId) => {
@@ -170,7 +175,7 @@ export async function listRoomsForUser(
       const message = latest?.[0] ?? null;
       if (message) {
         lastMessageMap.set(roomId, {
-          text: message.content ?? '',
+          content: message.content ?? null,
           created_at: message.created_at,
         });
       }
@@ -179,11 +184,11 @@ export async function listRoomsForUser(
 
   const items = memberships.map((membership) => {
     const peers = (rawPeers ?? [])
-      .filter((item) => item.room_id === membership.room_id)
-      .map((item) => {
-        const profile = profileMap.get(item.user_id) ?? null;
+      .filter((peer) => peer.room_id === membership.room_id)
+      .map((peer) => {
+        const profile = profileMap.get(peer.user_id) ?? null;
         return {
-          id: item.user_id,
+          id: peer.user_id,
           name: resolveProfileName(profile, 'Участник чата'),
           avatarUrl: profile?.avatar_url ?? null,
         } satisfies RoomMemberProfile;
@@ -194,9 +199,9 @@ export async function listRoomsForUser(
     return {
       id: membership.room_id,
       roomId: membership.room_id,
-      role: membership.role,
+      role: membership.role as RoomRole,
       peers,
-      lastMessageText: lastMessage?.text ?? '',
+      lastMessageText: lastMessage?.content ?? null,
       lastMessageAt: lastMessage?.created_at ?? null,
     } satisfies RoomListItem;
   });
@@ -212,7 +217,7 @@ export async function listRoomsForUser(
 }
 
 export async function ensureRoomForStayRequest(
-  supabase: SupabaseClient<Database, 'public'>,
+  supabase: TypedSupabase,
   requestId: string
 ): Promise<{ roomId: string; travelerId: string; hostId: string } | null> {
   const { data: request, error } = await supabase
@@ -225,25 +230,10 @@ export async function ensureRoomForStayRequest(
     return null;
   }
 
-  let roomId = request.room_id;
+  const roomId = await ensureRoomExists(supabase, request.room_id);
 
-  if (!roomId) {
-    const { data: inserted, error: insertError } = await supabase
-      .from('rooms')
-      .insert({})
-      .select('id')
-      .single();
-
-    if (insertError || !inserted) {
-      throw insertError ?? new Error('failed to create room');
-    }
-
-    roomId = inserted.id;
-
-    await supabase
-      .from('stay_requests')
-      .update({ room_id: roomId })
-      .eq('id', request.id);
+  if (roomId !== request.room_id) {
+    await supabase.from('stay_requests').update({ room_id: roomId }).eq('id', request.id);
   }
 
   const members: RoomMemberInsert[] = [
@@ -251,17 +241,13 @@ export async function ensureRoomForStayRequest(
     { room_id: roomId, user_id: request.host_id, role: 'host' },
   ];
 
-  await supabase
-    .from('room_members')
-    .upsert(members, {
-      onConflict: 'room_id,user_id',
-    });
+  await upsertMembers(supabase, members);
 
   return { roomId, travelerId: request.traveler_id, hostId: request.host_id };
 }
 
 export async function ensureRoomForUsers(
-  supabase: SupabaseClient<Database, 'public'>,
+  supabase: TypedSupabase,
   userA: string,
   userB: string
 ): Promise<string> {
@@ -298,26 +284,14 @@ export async function ensureRoomForUsers(
     }
   }
 
-  const { data: room, error: roomError } = await supabase
-    .from('rooms')
-    .insert({})
-    .select('id')
-    .single();
-
-  if (roomError || !room) {
-    throw roomError ?? new Error('failed to create room');
-  }
+  const roomId = await ensureRoomExists(supabase, null);
 
   const members: RoomMemberInsert[] = [
-    { room_id: room.id, user_id: userA, role: 'member' },
-    { room_id: room.id, user_id: userB, role: 'member' },
+    { room_id: roomId, user_id: userA, role: 'member' },
+    { room_id: roomId, user_id: userB, role: 'member' },
   ];
 
-  await supabase
-    .from('room_members')
-    .upsert(members, {
-      onConflict: 'room_id,user_id',
-    });
+  await upsertMembers(supabase, members);
 
-  return room.id;
+  return roomId;
 }
