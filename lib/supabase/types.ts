@@ -239,7 +239,7 @@ export type Database = {
           message: string | null;
           room_id: string | null;
           start_date: string | null;
-          status: string | null;
+          status: Database['public']['Enums']['application_status'] | null;
           traveler_id: string;
         };
         Insert: {
@@ -251,7 +251,7 @@ export type Database = {
           message?: string | null;
           room_id?: string | null;
           start_date?: string | null;
-          status?: string | null;
+          status?: Database['public']['Enums']['application_status'] | null;
           traveler_id: string;
         };
         Update: {
@@ -263,7 +263,7 @@ export type Database = {
           message?: string | null;
           room_id?: string | null;
           start_date?: string | null;
-          status?: string | null;
+          status?: Database['public']['Enums']['application_status'] | null;
           traveler_id?: string;
         };
         Relationships: [
