@@ -17,6 +17,51 @@ export type RoomListItem = {
   peers: RoomMemberProfile[];
 };
 
+export async function ensureRoomForApplication(
+  supabase: SupabaseClient<Database>,
+  applicationId: string
+): Promise<{ roomId: string; guestId: string; hostId: string } | null> {
+  const { data: application, error } = await supabase
+    .from('applications')
+    .select('id, guest_id, host_id, room_id')
+    .eq('id', applicationId)
+    .maybeSingle();
+
+  if (error || !application) {
+    return null;
+  }
+
+  let roomId = application.room_id;
+
+  if (!roomId) {
+    const { data: inserted, error: insertError } = await supabase
+      .from('rooms')
+      .insert({})
+      .select('id')
+      .single();
+
+    if (insertError || !inserted) {
+      throw insertError ?? new Error('failed to create room');
+    }
+
+    roomId = inserted.id;
+
+    await supabase
+      .from('applications')
+      .update({ room_id: roomId })
+      .eq('id', application.id);
+  }
+
+  const members = [
+    { room_id: roomId, user_id: application.guest_id, role: 'guest' },
+    { room_id: roomId, user_id: application.host_id, role: 'host' },
+  ];
+
+  await supabase.from('room_members').upsert(members, { onConflict: 'room_id,user_id' } as never);
+
+  return { roomId, guestId: application.guest_id, hostId: application.host_id };
+}
+
 function resolveProfileName(profile: {
   full_name: string | null;
   first_name: string | null;
