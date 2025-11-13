@@ -6,6 +6,8 @@ import {
   type ApplicationRow,
   type RouteClient,
 } from '@/app/api/applications/utils';
+import { getAdminSupabase } from '@/lib/supabaseAdmin';
+import type { Database } from '@/lib/supabase/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,17 +15,24 @@ export const dynamic = 'force-dynamic';
 async function loadApplication(supabase: RouteClient, id: string) {
   return supabase
     .from('applications')
-    .select('id, host_id, guest_id, listing_id, message, status, created_at, room_id')
+    .select('id, host_id, guest_id, listing_id, start_date, end_date, message, status, created_at, room_id')
     .eq('id', id)
     .maybeSingle();
 }
 
-async function ensureRoomMember(supabase: RouteClient, roomId: string, userId: string) {
-  const { error } = await supabase
+async function ensureRoomMember(
+  _supabase: RouteClient,
+  roomId: string,
+  userId: string,
+  role: 'host' | 'guest'
+) {
+  const admin = getAdminSupabase();
+  const { error } = await admin
     .from('room_members')
-    .insert({ room_id: roomId, user_id: userId })
-    .select('room_id, user_id')
-    .single();
+    .upsert(
+      [{ room_id: roomId, user_id: userId, role }] as Database['public']['Tables']['room_members']['Insert'][],
+      { onConflict: 'room_id,user_id' } as never
+    );
 
   if (error) {
     if (error.code === '23505') {
@@ -40,10 +49,11 @@ async function acceptApplication(
   supabase: RouteClient,
   application: ApplicationRow
 ): Promise<ApplicationRow> {
+  const admin = getAdminSupabase();
   let roomId = application.room_id;
 
   if (!roomId) {
-    const { data: roomData, error: roomError } = await supabase
+    const { data: roomData, error: roomError } = await admin
       .from('rooms')
       .insert({})
       .select('id')
@@ -56,21 +66,25 @@ async function acceptApplication(
     roomId = roomData.id;
   }
 
-  const { data: updatedApplication, error: updateError } = await supabase
+  await ensureRoomMember(supabase, roomId, application.host_id, 'host');
+  await ensureRoomMember(supabase, roomId, application.guest_id, 'guest');
+
+  const { error: updateError } = await admin
     .from('applications')
     .update({ status: 'accepted', room_id: roomId })
-    .eq('id', application.id)
-    .select('id, host_id, guest_id, listing_id, message, status, created_at, room_id')
-    .single();
+    .eq('id', application.id);
 
-  if (updateError || !updatedApplication) {
-    throw updateError ?? new Error('application_update_failed');
+  if (updateError) {
+    throw updateError;
   }
 
-  await ensureRoomMember(supabase, roomId, updatedApplication.host_id);
-  await ensureRoomMember(supabase, roomId, updatedApplication.guest_id);
+  const { data: refreshed, error: refreshError } = await loadApplication(supabase, application.id);
 
-  return updatedApplication as ApplicationRow;
+  if (refreshError || !refreshed) {
+    throw refreshError ?? new Error('application_update_failed');
+  }
+
+  return refreshed as ApplicationRow;
 }
 
 export async function GET(
@@ -111,10 +125,10 @@ export async function PATCH(
   }
 
   const payload = await request.json().catch(() => null);
-  const nextStatusRaw = typeof payload?.status === 'string' ? payload.status.trim().toLowerCase() : '';
+  const actionRaw = typeof payload?.action === 'string' ? payload.action.trim().toLowerCase() : '';
 
-  if (!['accepted', 'declined', 'cancelled'].includes(nextStatusRaw)) {
-    return NextResponse.json({ error: 'invalid_status' }, { status: 400 });
+  if (!['accept', 'decline', 'cancel'].includes(actionRaw)) {
+    return NextResponse.json({ error: 'invalid_action' }, { status: 400 });
   }
 
   const { data, error } = await loadApplication(supabase, params.id);
@@ -138,18 +152,18 @@ export async function PATCH(
   try {
     let updated: ApplicationRow = data as ApplicationRow;
 
-    if (nextStatusRaw === 'accepted') {
+    if (actionRaw === 'accept') {
       if (!isHost) {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 });
       }
       if (data.status === 'accepted' && data.room_id) {
-        await ensureRoomMember(supabase, data.room_id, data.host_id);
-        await ensureRoomMember(supabase, data.room_id, data.guest_id);
+        await ensureRoomMember(supabase, data.room_id, data.host_id, 'host');
+        await ensureRoomMember(supabase, data.room_id, data.guest_id, 'guest');
         updated = data as ApplicationRow;
       } else {
         updated = await acceptApplication(supabase, data as ApplicationRow);
       }
-    } else if (nextStatusRaw === 'declined') {
+    } else if (actionRaw === 'decline') {
       if (!isHost) {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 });
       }
@@ -157,13 +171,13 @@ export async function PATCH(
         .from('applications')
         .update({ status: 'declined' })
         .eq('id', data.id)
-        .select('id, host_id, guest_id, listing_id, message, status, created_at, room_id')
+        .select('id, host_id, guest_id, listing_id, start_date, end_date, message, status, created_at, room_id')
         .single();
       if (declineError || !declined) {
         throw declineError ?? new Error('decline_failed');
       }
       updated = declined as ApplicationRow;
-    } else if (nextStatusRaw === 'cancelled') {
+    } else if (actionRaw === 'cancel') {
       if (!isGuest) {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 });
       }
@@ -171,7 +185,7 @@ export async function PATCH(
         .from('applications')
         .update({ status: 'cancelled' })
         .eq('id', data.id)
-        .select('id, host_id, guest_id, listing_id, message, status, created_at, room_id')
+        .select('id, host_id, guest_id, listing_id, start_date, end_date, message, status, created_at, room_id')
         .single();
       if (cancelError || !cancelled) {
         throw cancelError ?? new Error('cancel_failed');

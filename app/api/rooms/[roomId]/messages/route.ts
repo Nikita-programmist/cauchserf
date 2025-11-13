@@ -37,8 +37,16 @@ async function ensureMembership(supabase: any, roomId: string, userId: string) {
   return Boolean(data);
 }
 
+function parseLimit(searchParams: URLSearchParams) {
+  const raw = Number(searchParams.get('limit'));
+  if (!Number.isFinite(raw)) {
+    return 50;
+  }
+  return Math.min(200, Math.max(1, Math.trunc(raw)));
+}
+
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { roomId: string } }
 ) {
   const roomId = params.roomId;
@@ -59,19 +67,22 @@ export async function GET(
       return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
 
+    const { searchParams } = new URL(req.url);
+    const limit = parseLimit(searchParams);
+
     const { data, error } = await supabase
       .from('messages')
       .select('id, room_id, user_id, content, created_at')
       .eq('room_id', roomId)
-      .order('created_at', { ascending: false })
-      .limit(50);
+      .order('created_at', { ascending: true })
+      .limit(limit);
 
     if (error) {
       console.error(`[GET /api/rooms/${roomId}/messages] failed to load messages`, error);
       return NextResponse.json({ error: 'failed_to_load_messages' }, { status: 500 });
     }
 
-    return NextResponse.json({ items: data ?? [] }, { status: 200 });
+    return NextResponse.json({ room_id: roomId, messages: data ?? [] }, { status: 200 });
   } catch (err) {
     console.error(`[GET /api/rooms/${roomId}/messages] unexpected error`, err);
     return NextResponse.json({ error: 'unexpected_error' }, { status: 500 });
@@ -112,7 +123,7 @@ export async function POST(
       return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
 
-    const { data, error } = await (supabase as any)
+    const { data, error } = await supabase
       .from('messages')
       .insert({
         room_id: roomId,
@@ -127,7 +138,7 @@ export async function POST(
       return NextResponse.json({ error: 'failed_to_send_message' }, { status: 500 });
     }
 
-    return NextResponse.json({ message: data }, { status: 200 });
+    return NextResponse.json({ message: data }, { status: 201 });
   } catch (err) {
     console.error(`[POST /api/rooms/${roomId}/messages] unexpected error`, err);
     return NextResponse.json({ error: 'unexpected_error' }, { status: 500 });

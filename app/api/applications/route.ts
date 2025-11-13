@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   try {
     const { data, error, count } = await supabase
       .from('applications')
-      .select('id, host_id, guest_id, listing_id, message, status, created_at, room_id', {
+      .select('id, host_id, guest_id, listing_id, start_date, end_date, message, status, created_at, room_id', {
         count: 'exact',
       })
       .eq(column, user.id)
@@ -61,9 +61,37 @@ export async function POST(request: Request) {
   }
 
   const payload = await request.json().catch(() => null);
-  const hostId = typeof payload?.host_id === 'string' ? payload.host_id.trim() : '';
-  const listingId = typeof payload?.listing_id === 'string' ? payload.listing_id.trim() : '';
-  const message = typeof payload?.message === 'string' ? payload.message.trim() : '';
+  const hostIdRaw =
+    typeof payload?.hostId === 'string'
+      ? payload.hostId
+      : typeof payload?.host_id === 'string'
+        ? payload.host_id
+        : '';
+  const listingIdRaw =
+    typeof payload?.listingId === 'string'
+      ? payload.listingId
+      : typeof payload?.listing_id === 'string'
+        ? payload.listing_id
+        : '';
+  const messageRaw = typeof payload?.message === 'string' ? payload.message : '';
+  const startDateRaw =
+    typeof payload?.startDate === 'string'
+      ? payload.startDate
+      : typeof payload?.start_date === 'string'
+        ? payload.start_date
+        : '';
+  const endDateRaw =
+    typeof payload?.endDate === 'string'
+      ? payload.endDate
+      : typeof payload?.end_date === 'string'
+        ? payload.end_date
+        : '';
+
+  const hostId = hostIdRaw.trim();
+  const listingId = listingIdRaw.trim();
+  const message = messageRaw.trim();
+  const startDate = startDateRaw.trim();
+  const endDate = endDateRaw.trim();
 
   if (!hostId) {
     return NextResponse.json({ error: 'host_id_required' }, { status: 400 });
@@ -80,10 +108,12 @@ export async function POST(request: Request) {
         host_id: hostId,
         guest_id: user.id,
         listing_id: listingId || null,
+        start_date: startDate || null,
+        end_date: endDate || null,
         message: message || null,
         status: 'pending',
       })
-      .select('id, host_id, guest_id, listing_id, message, status, created_at, room_id')
+      .select('id, host_id, guest_id, listing_id, start_date, end_date, message, status, created_at, room_id')
       .single();
 
     if (error || !data) {

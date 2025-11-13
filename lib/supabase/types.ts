@@ -46,6 +46,8 @@ export type Database = {
           host_id: string;
           guest_id: string;
           listing_id: string | null;
+          start_date: string | null;
+          end_date: string | null;
           message: string | null;
           status: 'pending' | 'accepted' | 'declined' | 'cancelled';
           created_at: string | null;
@@ -56,6 +58,8 @@ export type Database = {
           host_id: string;
           guest_id: string;
           listing_id?: string | null;
+          start_date?: string | null;
+          end_date?: string | null;
           message?: string | null;
           status?: 'pending' | 'accepted' | 'declined' | 'cancelled';
           created_at?: string | null;
@@ -66,6 +70,8 @@ export type Database = {
           host_id?: string;
           guest_id?: string;
           listing_id?: string | null;
+          start_date?: string | null;
+          end_date?: string | null;
           message?: string | null;
           status?: 'pending' | 'accepted' | 'declined' | 'cancelled';
           created_at?: string | null;
