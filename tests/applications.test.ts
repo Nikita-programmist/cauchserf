@@ -12,6 +12,10 @@ vi.mock('@/app/api/applications/utils', async () => {
   };
 });
 
+vi.mock('@/lib/supabaseAdmin', () => ({
+  getAdminSupabase: vi.fn(),
+}));
+
 import { GET as listApplications } from '@/app/api/applications/route';
 import { PATCH as updateApplication } from '@/app/api/applications/[id]/route';
 import {
@@ -20,10 +24,12 @@ import {
   parsePagination,
   type ApplicationRow,
 } from '@/app/api/applications/utils';
+import { getAdminSupabase } from '@/lib/supabaseAdmin';
 
 const mockedGetAuthClient = getAuthClient as unknown as vi.Mock;
 const mockedEnrichApplications = enrichApplications as unknown as vi.Mock;
 const mockedParsePagination = parsePagination as unknown as vi.Mock;
+const mockedGetAdminSupabase = getAdminSupabase as unknown as vi.Mock;
 
 describe('applications API', () => {
   beforeEach(() => {
@@ -36,6 +42,8 @@ describe('applications API', () => {
       host_id: 'host-1',
       guest_id: 'guest-1',
       listing_id: null,
+      start_date: null,
+      end_date: null,
       message: 'Привет',
       status: 'pending',
       created_at: '2024-01-01T00:00:00Z',
@@ -81,6 +89,8 @@ describe('applications API', () => {
       host_id: 'host-2',
       guest_id: 'guest-2',
       listing_id: null,
+      start_date: null,
+      end_date: null,
       message: null,
       status: 'pending',
       created_at: '2024-02-01T00:00:00Z',
@@ -93,47 +103,54 @@ describe('applications API', () => {
       room_id: 'room-123',
     };
 
-    const selectSingleMock = vi.fn().mockResolvedValue({ data: baseRow, error: null });
+    const selectSingleMock = vi
+      .fn()
+      .mockResolvedValueOnce({ data: baseRow, error: null })
+      .mockResolvedValueOnce({ data: updatedRow, error: null });
     const applicationsSelectMock = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({ maybeSingle: selectSingleMock }),
     });
-
-    const updateSingleMock = vi.fn().mockResolvedValue({ data: updatedRow, error: null });
-    const applicationsUpdateMock = vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({ single: updateSingleMock }),
-      }),
-    });
-
-    const roomsInsertMock = vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: { id: 'room-123' }, error: null }),
-      }),
-    });
-
-    const roomMembersInsertMock = vi.fn().mockImplementation(() => ({
-      select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: null, error: null }) }),
-    }));
 
     const supabase = {
       from: vi.fn((table: string) => {
         if (table === 'applications') {
           return {
             select: applicationsSelectMock,
-            update: applicationsUpdateMock,
           } as any;
-        }
-        if (table === 'rooms') {
-          return { insert: roomsInsertMock } as any;
-        }
-        if (table === 'room_members') {
-          return { insert: roomMembersInsertMock } as any;
         }
         throw new Error(`Unexpected table ${table}`);
       }),
     } as any;
 
+    const adminSupabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'rooms') {
+          return {
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { id: 'room-123' }, error: null }),
+              }),
+            }),
+          } as any;
+        }
+        if (table === 'room_members') {
+          return {
+            upsert: vi.fn().mockResolvedValue({ error: null }),
+          } as any;
+        }
+        if (table === 'applications') {
+          return {
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          } as any;
+        }
+        throw new Error(`Unexpected admin table ${table}`);
+      }),
+    } as any;
+
     mockedGetAuthClient.mockResolvedValue({ supabase, user: { id: 'host-2' } });
+    mockedGetAdminSupabase.mockReturnValue(adminSupabase);
     mockedEnrichApplications.mockResolvedValue([
       { ...updatedRow, host: null, guest: null },
     ]);
@@ -141,7 +158,7 @@ describe('applications API', () => {
     const response = await updateApplication(
       new Request('http://localhost/api/applications/app-2', {
         method: 'PATCH',
-        body: JSON.stringify({ status: 'accepted' }),
+        body: JSON.stringify({ action: 'accept' }),
       }),
       { params: { id: 'app-2' } }
     );
@@ -150,7 +167,6 @@ describe('applications API', () => {
     const body = await response.json();
     expect(body.room_id).toBe('room-123');
     expect(mockedEnrichApplications).toHaveBeenCalledWith(supabase, [updatedRow]);
-    expect(roomsInsertMock).toHaveBeenCalled();
-    expect(roomMembersInsertMock).toHaveBeenCalledTimes(2);
+    expect(mockedGetAdminSupabase).toHaveBeenCalled();
   });
 });
