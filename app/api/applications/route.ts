@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { ensureRoomForApplication } from '@/lib/chatService';
 import {
   enrichApplications,
   getAuthClient,
@@ -121,7 +122,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'failed_to_create' }, { status: 500 });
     }
 
-    const [application] = await enrichApplications(supabase, [data as ApplicationRow]);
+    let ensuredRoomId = data.room_id;
+    try {
+      const ensured = await ensureRoomForApplication(supabase, data.id);
+      ensuredRoomId = ensured?.roomId ?? ensuredRoomId;
+    } catch (err) {
+      console.error('[applications] failed to ensure room for application', err);
+    }
+
+    const baseApplication = { ...data, room_id: ensuredRoomId } as ApplicationRow;
+    const [application] = await enrichApplications(supabase, [baseApplication]);
     return NextResponse.json({ application }, { status: 201 });
   } catch (err) {
     console.error('[applications] unexpected create failure', err);
