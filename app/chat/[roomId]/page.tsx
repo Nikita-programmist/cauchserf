@@ -20,7 +20,7 @@ export default async function ChatPage({
   }
 
   const supabase = createServerComponentClient<Database>({ cookies });
-  const rooms = await listRoomsForUser(supabase as any, currentUser.id);
+  const rooms = await listRoomsForUser(supabase, currentUser.id);
   const roomId = params.roomId;
 
   return (

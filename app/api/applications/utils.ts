@@ -1,10 +1,22 @@
-import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 
 import type { Database } from '@/lib/supabase/types';
+import { getRouteHandlerSupabase } from '@/lib/supabaseServer';
 
-export type RouteClient = SupabaseClient<Database, 'public'>;
+export type ApplicationsCtx = {
+  supabase: SupabaseClient<Database>;
+  user: User | null;
+};
+
+export async function resolveApplicationsCtx(): Promise<ApplicationsCtx> {
+  const supabase = getRouteHandlerSupabase();
+  const { data, error } = await supabase.auth.getUser();
+  if (error) {
+    console.error('[applications] failed to resolve user', error);
+  }
+  return { supabase, user: data?.user ?? null };
+}
+
 export type ApplicationRow = Database['public']['Tables']['applications']['Row'];
 export type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
@@ -20,20 +32,6 @@ export interface ProfileSummary {
 export interface ApplicationsResponseItem extends ApplicationRow {
   host: ProfileSummary | null;
   guest: ProfileSummary | null;
-}
-
-export interface AuthenticatedRouteClient {
-  supabase: RouteClient;
-  user: User | null;
-}
-
-export async function getAuthClient(): Promise<AuthenticatedRouteClient> {
-  const supabase = createRouteHandlerClient<Database>({ cookies });
-  const { data, error } = await supabase.auth.getUser();
-  if (error) {
-    console.error('[applications] failed to resolve user', error);
-  }
-  return { supabase, user: data?.user ?? null };
 }
 
 export function parsePagination(searchParams: URLSearchParams) {
@@ -55,20 +53,30 @@ export function parsePagination(searchParams: URLSearchParams) {
   return { limit, page, from, to };
 }
 
-export function mapProfile(profile: ProfileRow | undefined): ProfileSummary | null {
+export function mapProfile(
+  profile:
+    | (Pick<ProfileRow, 'id'> &
+        Partial<
+          Pick<
+            ProfileRow,
+            'first_name' | 'last_name' | 'avatar_url' | 'city' | 'role' | 'full_name'
+          >
+        >)
+    | undefined
+): ProfileSummary | null {
   if (!profile) return null;
   return {
     id: profile.id,
     first_name: profile.first_name ?? null,
     last_name: profile.last_name ?? null,
     avatar_url: profile.avatar_url ?? null,
-    city: (profile as any).city ?? null,
-    role: (profile as any).role ?? null,
+    city: profile.city ?? null,
+    role: profile.role ?? null,
   };
 }
 
 export async function enrichApplications(
-  supabase: RouteClient,
+  supabase: SupabaseClient<Database>,
   applications: ApplicationRow[]
 ): Promise<ApplicationsResponseItem[]> {
   if (applications.length === 0) {
@@ -92,7 +100,7 @@ export async function enrichApplications(
 
   const profilesMap = new Map<string, ProfileSummary>();
   for (const profile of profilesData ?? []) {
-    const summary = mapProfile(profile as ProfileRow & Record<string, unknown>);
+    const summary = mapProfile(profile as Partial<ProfileRow> & { id: string });
     if (summary) {
       profilesMap.set(summary.id, summary);
     }

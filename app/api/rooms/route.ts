@@ -1,15 +1,13 @@
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 import { listRoomsForUser } from '@/lib/chatService';
-import type { Database } from '@/lib/supabase/types';
+import { getRouteHandlerSupabase } from '@/lib/supabaseServer';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const supabase = createRouteHandlerClient<Database>({ cookies });
+  const supabase = getRouteHandlerSupabase();
   const {
     data: { user },
     error,
@@ -21,7 +19,7 @@ export async function GET() {
   }
 
   try {
-    const rooms = await listRoomsForUser(supabase as any, user.id);
+    const rooms = await listRoomsForUser(supabase, user.id);
     return NextResponse.json({ rooms }, { status: 200 });
   } catch (err) {
     console.error('[GET /api/rooms] failed to load rooms', err);

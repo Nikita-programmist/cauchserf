@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server';
 import { ensureRoomForApplication } from '@/lib/chatService';
 import {
   enrichApplications,
-  getAuthClient,
   parsePagination,
+  resolveApplicationsCtx,
   type ApplicationRow,
 } from '@/app/api/applications/utils';
 
@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const { supabase, user } = await getAuthClient();
+  const { supabase, user } = await resolveApplicationsCtx();
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { supabase, user } = await getAuthClient();
+  const { supabase, user } = await resolveApplicationsCtx();
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }

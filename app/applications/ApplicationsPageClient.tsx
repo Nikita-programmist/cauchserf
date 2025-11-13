@@ -75,7 +75,7 @@ export default function ApplicationsPageClient() {
   const [actionError, setActionError] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const { data, error, isLoading, mutate } = useSWR<ApplicationsResponse, Error>(
+  const { data, error, mutate } = useSWR<ApplicationsResponse, Error>(
     ['applications', activeRole],
     fetcher,
     {
@@ -83,6 +83,8 @@ export default function ApplicationsPageClient() {
       keepPreviousData: true,
     }
   );
+
+  const isLoading = !data && !error;
 
   const applications = data?.items ?? [];
 

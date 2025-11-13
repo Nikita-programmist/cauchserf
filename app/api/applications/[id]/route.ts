@@ -1,17 +1,15 @@
 import { NextResponse } from 'next/server';
-
 import {
+  type ApplicationsCtx,
   enrichApplications,
-  getAuthClient,
+  resolveApplicationsCtx,
   type ApplicationRow,
-  type RouteClient,
 } from '@/app/api/applications/utils';
 import { getAdminSupabase } from '@/lib/supabaseAdmin';
 import type { Database } from '@/lib/supabase/types';
 
-type RoomMemberInsert = Database['public']['Tables']['room_members'] extends { Insert: infer I }
-  ? I
-  : never;
+type RoomRole = Database['public']['Enums']['room_role'];
+type RouteClient = ApplicationsCtx['supabase'];
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,28 +22,17 @@ async function loadApplication(supabase: RouteClient, id: string) {
     .maybeSingle();
 }
 
-async function ensureRoomMember(
-  _supabase: RouteClient,
-  roomId: string,
-  userId: string,
-  role: 'host' | 'guest'
-) {
+async function ensureRoomMember(roomId: string, userId: string, role: RoomRole) {
   const admin = getAdminSupabase();
-  const payload: RoomMemberInsert[] = [{ room_id: roomId, user_id: userId, role }];
+  const rows = [
+    { room_id: roomId, user_id: userId, role },
+  ] satisfies Database['public']['Tables']['room_members']['Insert'][];
 
   const { error } = await admin
     .from('room_members')
-    .upsert(payload, {
-      onConflict: 'room_id,user_id',
-    });
+    .upsert(rows, { onConflict: 'room_id,user_id' });
 
   if (error) {
-    if (error.code === '23505') {
-      return;
-    }
-    if (error.message?.includes('duplicate key')) {
-      return;
-    }
     throw error;
   }
 }
@@ -71,12 +58,18 @@ async function acceptApplication(
     roomId = roomData.id;
   }
 
-  await ensureRoomMember(supabase, roomId, application.host_id, 'host');
-  await ensureRoomMember(supabase, roomId, application.guest_id, 'guest');
+  if (!roomId) {
+    throw new Error('room_resolve_failed');
+  }
+
+  const ensuredRoomId = roomId;
+
+  await ensureRoomMember(ensuredRoomId, application.host_id, 'host');
+  await ensureRoomMember(ensuredRoomId, application.guest_id, 'guest');
 
   const { error: updateError } = await admin
     .from('applications')
-    .update({ status: 'accepted', room_id: roomId })
+    .update({ status: 'accepted', room_id: ensuredRoomId })
     .eq('id', application.id);
 
   if (updateError) {
@@ -89,14 +82,14 @@ async function acceptApplication(
     throw refreshError ?? new Error('application_update_failed');
   }
 
-  return refreshed as ApplicationRow;
+  return { ...refreshed, room_id: ensuredRoomId } as ApplicationRow;
 }
 
 export async function GET(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
-  const { supabase, user } = await getAuthClient();
+  const { supabase, user } = await resolveApplicationsCtx();
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
@@ -108,15 +101,17 @@ export async function GET(
     return NextResponse.json({ error: 'failed_to_load' }, { status: 500 });
   }
 
-  if (!data) {
+  const applicationRow = data as ApplicationRow | null;
+
+  if (!applicationRow) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 
-  if (data.host_id !== user.id && data.guest_id !== user.id) {
+  if (applicationRow.host_id !== user.id && applicationRow.guest_id !== user.id) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
-  const [application] = await enrichApplications(supabase, [data as ApplicationRow]);
+  const [application] = await enrichApplications(supabase, [applicationRow]);
   return NextResponse.json({ application });
 }
 
@@ -124,7 +119,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const { supabase, user } = await getAuthClient();
+  const { supabase, user } = await resolveApplicationsCtx();
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
@@ -143,30 +138,32 @@ export async function PATCH(
     return NextResponse.json({ error: 'failed_to_load' }, { status: 500 });
   }
 
-  if (!data) {
+  const applicationRow = data as ApplicationRow | null;
+
+  if (!applicationRow) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 
-  const isHost = data.host_id === user.id;
-  const isGuest = data.guest_id === user.id;
+  const isHost = applicationRow.host_id === user.id;
+  const isGuest = applicationRow.guest_id === user.id;
 
   if (!isHost && !isGuest) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
   try {
-    let updated: ApplicationRow = data as ApplicationRow;
+    let updated: ApplicationRow = applicationRow;
 
     if (actionRaw === 'accept') {
       if (!isHost) {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 });
       }
-      if (data.status === 'accepted' && data.room_id) {
-        await ensureRoomMember(supabase, data.room_id, data.host_id, 'host');
-        await ensureRoomMember(supabase, data.room_id, data.guest_id, 'guest');
-        updated = data as ApplicationRow;
+      if (applicationRow.status === 'accepted' && applicationRow.room_id) {
+        await ensureRoomMember(applicationRow.room_id, applicationRow.host_id, 'host');
+        await ensureRoomMember(applicationRow.room_id, applicationRow.guest_id, 'guest');
+        updated = applicationRow;
       } else {
-        updated = await acceptApplication(supabase, data as ApplicationRow);
+        updated = await acceptApplication(supabase, applicationRow);
       }
     } else if (actionRaw === 'decline') {
       if (!isHost) {
@@ -175,7 +172,7 @@ export async function PATCH(
       const { data: declined, error: declineError } = await supabase
         .from('applications')
         .update({ status: 'declined' })
-        .eq('id', data.id)
+        .eq('id', applicationRow.id)
         .select('id, host_id, guest_id, listing_id, start_date, end_date, message, status, created_at, room_id')
         .single();
       if (declineError || !declined) {
@@ -189,7 +186,7 @@ export async function PATCH(
       const { data: cancelled, error: cancelError } = await supabase
         .from('applications')
         .update({ status: 'cancelled' })
-        .eq('id', data.id)
+        .eq('id', applicationRow.id)
         .select('id, host_id, guest_id, listing_id, start_date, end_date, message, status, created_at, room_id')
         .single();
       if (cancelError || !cancelled) {

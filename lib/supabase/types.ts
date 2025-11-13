@@ -9,235 +9,293 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      applications: {
+        Row: {
+          created_at: string;
+          end_date: string | null;
+          guest_id: string;
+          host_id: string;
+          id: string;
+          listing_id: string | null;
+          message: string | null;
+          room_id: string | null;
+          start_date: string | null;
+          status: Database['public']['Enums']['application_status'];
+        };
+        Insert: {
+          created_at?: string;
+          end_date?: string | null;
+          guest_id: string;
+          host_id: string;
+          id?: string;
+          listing_id?: string | null;
+          message?: string | null;
+          room_id?: string | null;
+          start_date?: string | null;
+          status?: Database['public']['Enums']['application_status'];
+        };
+        Update: {
+          created_at?: string;
+          end_date?: string | null;
+          guest_id?: string;
+          host_id?: string;
+          id?: string;
+          listing_id?: string | null;
+          message?: string | null;
+          room_id?: string | null;
+          start_date?: string | null;
+          status?: Database['public']['Enums']['application_status'];
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'applications_room_id_fkey';
+            columns: ['room_id'];
+            isOneToOne: false;
+            referencedRelation: 'rooms';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       messages: {
         Row: {
+          content: string;
+          created_at: string;
           id: string;
           room_id: string;
           user_id: string | null;
-          content: string;
-          created_at: string;
         };
         Insert: {
+          content: string;
+          created_at?: string;
           id?: string;
           room_id: string;
           user_id?: string | null;
-          content: string;
-          created_at?: string;
         };
         Update: {
+          content?: string;
+          created_at?: string;
           id?: string;
           room_id?: string;
           user_id?: string | null;
-          content?: string;
-          created_at?: string;
         };
         Relationships: [
           {
             foreignKeyName: 'messages_room_id_fkey';
             columns: ['room_id'];
+            isOneToOne: false;
             referencedRelation: 'rooms';
             referencedColumns: ['id'];
-          }
-        ];
-      };
-      applications: {
-        Row: {
-          id: string;
-          host_id: string;
-          guest_id: string;
-          listing_id: string | null;
-          start_date: string | null;
-          end_date: string | null;
-          message: string | null;
-          status: 'pending' | 'accepted' | 'declined' | 'cancelled';
-          created_at: string | null;
-          room_id: string | null;
-        };
-        Insert: {
-          id?: string;
-          host_id: string;
-          guest_id: string;
-          listing_id?: string | null;
-          start_date?: string | null;
-          end_date?: string | null;
-          message?: string | null;
-          status?: 'pending' | 'accepted' | 'declined' | 'cancelled';
-          created_at?: string | null;
-          room_id?: string | null;
-        };
-        Update: {
-          id?: string;
-          host_id?: string;
-          guest_id?: string;
-          listing_id?: string | null;
-          start_date?: string | null;
-          end_date?: string | null;
-          message?: string | null;
-          status?: 'pending' | 'accepted' | 'declined' | 'cancelled';
-          created_at?: string | null;
-          room_id?: string | null;
-        };
-        Relationships: [];
-      };
-      stay_requests: {
-        Row: {
-          id: string;
-          traveler_id: string;
-          host_id: string;
-          listing_id: string | null;
-          start_date: string | null;
-          end_date: string | null;
-          message: string | null;
-          status: string | null;
-          created_at: string | null;
-          room_id: string | null;
-        };
-        Insert: {
-          id?: string;
-          traveler_id: string;
-          host_id: string;
-          listing_id?: string | null;
-          start_date?: string | null;
-          end_date?: string | null;
-          message?: string | null;
-          status?: string | null;
-          created_at?: string | null;
-          room_id?: string | null;
-        };
-        Update: {
-          id?: string;
-          traveler_id?: string;
-          host_id?: string;
-          listing_id?: string | null;
-          start_date?: string | null;
-          end_date?: string | null;
-          message?: string | null;
-          status?: string | null;
-          created_at?: string | null;
-          room_id?: string | null;
-        };
-        Relationships: [
+          },
           {
-            foreignKeyName: 'stay_requests_room_id_fkey';
-            columns: ['room_id'];
-            referencedRelation: 'rooms';
+            foreignKeyName: 'messages_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
             referencedColumns: ['id'];
-          }
-        ];
-      };
-      bookings: {
-        Row: {
-          id: string;
-          traveler_id: string;
-          host_id: string;
-        };
-        Insert: {
-          id?: string;
-          traveler_id: string;
-          host_id: string;
-        };
-        Update: {
-          id?: string;
-          traveler_id?: string;
-          host_id?: string;
-        };
-        Relationships: [];
-      };
-      rooms: {
-        Row: {
-          id: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          created_at?: string;
-        };
-        Relationships: [];
-      };
-      room_members: {
-        Row: {
-          room_id: string;
-          user_id: string;
-          role: string;
-        };
-        Insert: {
-          room_id: string;
-          user_id: string;
-          role?: string;
-        };
-        Update: {
-          room_id?: string;
-          user_id?: string;
-          role?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: 'room_members_room_id_fkey';
-            columns: ['room_id'];
-            referencedRelation: 'rooms';
-            referencedColumns: ['id'];
+            referencedSchema: 'auth';
           }
         ];
       };
       profiles: {
         Row: {
-          id: string;
-          first_name: string | null;
-          last_name: string | null;
-          full_name: string | null;
-          name: string | null;
-          avatar_url: string | null;
-          city: string | null;
           age: number | null;
-          gender: string | null;
+          avatar_url: string | null;
           bio: string | null;
+          city: string | null;
+          first_name: string | null;
+          full_name: string | null;
+          gender: string | null;
+          id: string;
+          last_name: string | null;
+          name: string | null;
           role: string | null;
         };
         Insert: {
-          id: string;
-          first_name?: string | null;
-          last_name?: string | null;
-          full_name?: string | null;
-          name?: string | null;
-          avatar_url?: string | null;
-          city?: string | null;
           age?: number | null;
-          gender?: string | null;
+          avatar_url?: string | null;
           bio?: string | null;
+          city?: string | null;
+          first_name?: string | null;
+          full_name?: string | null;
+          gender?: string | null;
+          id: string;
+          last_name?: string | null;
+          name?: string | null;
           role?: string | null;
         };
         Update: {
-          id?: string;
-          first_name?: string | null;
-          last_name?: string | null;
-          full_name?: string | null;
-          name?: string | null;
-          avatar_url?: string | null;
-          city?: string | null;
           age?: number | null;
-          gender?: string | null;
+          avatar_url?: string | null;
           bio?: string | null;
+          city?: string | null;
+          first_name?: string | null;
+          full_name?: string | null;
+          gender?: string | null;
+          id?: string;
+          last_name?: string | null;
+          name?: string | null;
           role?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'profiles_id_fkey';
+            columns: ['id'];
+            isOneToOne: true;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+            referencedSchema: 'auth';
+          }
+        ];
+      };
+      requests: {
+        Row: {
+          created_at: string | null;
+          end_date: string;
+          guest_id: string;
+          host_id: string;
+          id: string;
+          listing_title: string | null;
+          message: string | null;
+          start_date: string;
+        };
+        Insert: {
+          created_at?: string | null;
+          end_date: string;
+          guest_id: string;
+          host_id: string;
+          id?: string;
+          listing_title?: string | null;
+          message?: string | null;
+          start_date: string;
+        };
+        Update: {
+          created_at?: string | null;
+          end_date?: string;
+          guest_id?: string;
+          host_id?: string;
+          id?: string;
+          listing_title?: string | null;
+          message?: string | null;
+          start_date?: string;
         };
         Relationships: [];
       };
+      room_members: {
+        Row: {
+          role: Database['public']['Enums']['room_role'];
+          room_id: string;
+          user_id: string;
+        };
+        Insert: {
+          role?: Database['public']['Enums']['room_role'];
+          room_id: string;
+          user_id: string;
+        };
+        Update: {
+          role?: Database['public']['Enums']['room_role'];
+          room_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'room_members_room_id_fkey';
+            columns: ['room_id'];
+            isOneToOne: false;
+            referencedRelation: 'rooms';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'room_members_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+            referencedSchema: 'auth';
+          }
+        ];
+      };
+      rooms: {
+        Row: {
+          created_at: string;
+          id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+        };
+        Relationships: [];
+      };
+      stay_requests: {
+        Row: {
+          created_at: string | null;
+          end_date: string | null;
+          host_id: string;
+          id: string;
+          listing_id: string | null;
+          message: string | null;
+          room_id: string | null;
+          start_date: string | null;
+          status: string | null;
+          traveler_id: string;
+        };
+        Insert: {
+          created_at?: string | null;
+          end_date?: string | null;
+          host_id: string;
+          id?: string;
+          listing_id?: string | null;
+          message?: string | null;
+          room_id?: string | null;
+          start_date?: string | null;
+          status?: string | null;
+          traveler_id: string;
+        };
+        Update: {
+          created_at?: string | null;
+          end_date?: string | null;
+          host_id?: string;
+          id?: string;
+          listing_id?: string | null;
+          message?: string | null;
+          room_id?: string | null;
+          start_date?: string | null;
+          status?: string | null;
+          traveler_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'stay_requests_listing_id_fkey';
+            columns: ['listing_id'];
+            isOneToOne: false;
+            referencedRelation: 'listings';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'stay_requests_room_id_fkey';
+            columns: ['room_id'];
+            isOneToOne: false;
+            referencedRelation: 'rooms';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
     };
     Views: {
-      [key: string]: never;
+      [_ in never]: never;
     };
     Functions: {
-      [key: string]: never;
+      [_ in never]: never;
     };
     Enums: {
-      [key: string]: never;
+      application_status: 'pending' | 'accepted' | 'declined' | 'cancelled';
+      room_role: 'member' | 'host' | 'guest' | 'traveler';
     };
     CompositeTypes: {
-      [key: string]: never;
+      [_ in never]: never;
     };
   };
 };
-
