@@ -4,7 +4,7 @@ import type { SupabaseClient, User } from '@supabase/supabase-js';
 
 import type { Database } from '@/lib/supabase/types';
 
-export type RouteClient = SupabaseClient<Database>;
+export type RouteClient = SupabaseClient<Database, 'public'>;
 export type ApplicationRow = Database['public']['Tables']['applications']['Row'];
 export type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
