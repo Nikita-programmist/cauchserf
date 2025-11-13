@@ -9,6 +9,10 @@ import {
 import { getAdminSupabase } from '@/lib/supabaseAdmin';
 import type { Database } from '@/lib/supabase/types';
 
+type RoomMemberInsert = Database['public']['Tables']['room_members'] extends { Insert: infer I }
+  ? I
+  : never;
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -27,12 +31,13 @@ async function ensureRoomMember(
   role: 'host' | 'guest'
 ) {
   const admin = getAdminSupabase();
+  const payload: RoomMemberInsert[] = [{ room_id: roomId, user_id: userId, role }];
+
   const { error } = await admin
     .from('room_members')
-    .upsert(
-      [{ room_id: roomId, user_id: userId, role }] as Database['public']['Tables']['room_members']['Insert'][],
-      { onConflict: 'room_id,user_id' } as never
-    );
+    .upsert(payload, {
+      onConflict: 'room_id,user_id',
+    });
 
   if (error) {
     if (error.code === '23505') {

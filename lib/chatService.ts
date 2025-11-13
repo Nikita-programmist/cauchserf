@@ -2,6 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { Database } from '@/lib/supabase/types';
 
+type RoomMemberInsert = Database['public']['Tables']['room_members'] extends { Insert: infer I }
+  ? I
+  : never;
+
 export type RoomMemberProfile = {
   id: string;
   name: string;
@@ -18,7 +22,7 @@ export type RoomListItem = {
 };
 
 export async function ensureRoomForApplication(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient<Database, 'public'>,
   applicationId: string
 ): Promise<{ roomId: string; guestId: string; hostId: string } | null> {
   const { data: application, error } = await supabase
@@ -52,12 +56,14 @@ export async function ensureRoomForApplication(
       .eq('id', application.id);
   }
 
-  const members = [
+  const members: RoomMemberInsert[] = [
     { room_id: roomId, user_id: application.guest_id, role: 'guest' },
     { room_id: roomId, user_id: application.host_id, role: 'host' },
   ];
 
-  await supabase.from('room_members').upsert(members, { onConflict: 'room_id,user_id' } as never);
+  await supabase
+    .from('room_members')
+    .upsert(members, { onConflict: 'room_id,user_id' });
 
   return { roomId, guestId: application.guest_id, hostId: application.host_id };
 }
@@ -206,7 +212,7 @@ export async function listRoomsForUser(
 }
 
 export async function ensureRoomForStayRequest(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient<Database, 'public'>,
   requestId: string
 ): Promise<{ roomId: string; travelerId: string; hostId: string } | null> {
   const { data: request, error } = await supabase
@@ -240,20 +246,22 @@ export async function ensureRoomForStayRequest(
       .eq('id', request.id);
   }
 
-  const members = [
+  const members: RoomMemberInsert[] = [
     { room_id: roomId, user_id: request.traveler_id, role: 'traveler' },
     { room_id: roomId, user_id: request.host_id, role: 'host' },
   ];
 
-  await supabase.from('room_members').upsert(members, {
-    onConflict: 'room_id,user_id',
-  } as never);
+  await supabase
+    .from('room_members')
+    .upsert(members, {
+      onConflict: 'room_id,user_id',
+    });
 
   return { roomId, travelerId: request.traveler_id, hostId: request.host_id };
 }
 
 export async function ensureRoomForUsers(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient<Database, 'public'>,
   userA: string,
   userB: string
 ): Promise<string> {
@@ -300,14 +308,16 @@ export async function ensureRoomForUsers(
     throw roomError ?? new Error('failed to create room');
   }
 
-  const members = [
+  const members: RoomMemberInsert[] = [
     { room_id: room.id, user_id: userA, role: 'member' },
     { room_id: room.id, user_id: userB, role: 'member' },
   ];
 
-  await supabase.from('room_members').upsert(members, {
-    onConflict: 'room_id,user_id',
-  } as never);
+  await supabase
+    .from('room_members')
+    .upsert(members, {
+      onConflict: 'room_id,user_id',
+    });
 
   return room.id;
 }
