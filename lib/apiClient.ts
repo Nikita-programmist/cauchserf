@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 const TOKEN_KEY = 'cauchserf_jwt';
 
 export function getToken() {
@@ -17,13 +17,20 @@ export function clearToken() {
 }
 
 async function request(path: string, options: RequestInit = {}) {
+  if (!API_BASE_URL) {
+    const message =
+      'NEXT_PUBLIC_API_URL is not set. Please configure the backend URL in your environment.';
+    console.warn(message);
+    throw new Error(message);
+  }
+
   const token = getToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...(options.headers || {})
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   if (!res.ok) {
     const message = await res.text();
     throw new Error(message || 'Request failed');
