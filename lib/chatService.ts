@@ -17,6 +17,21 @@ export type MessageDto = {
   createdAt: string;
 };
 
+export type RoomPeer = {
+  id: string;
+  name: string | null;
+  avatarUrl: string | null;
+};
+
+export type RoomListItem = {
+  id: string;
+  roomId: string | null;
+  stayRequestId?: string | null;
+  peers: RoomPeer[];
+  lastMessageText?: string | null;
+  lastMessageAt?: string | null;
+};
+
 export async function getOrCreateConversation(params: {
   stayRequestId?: string;
   hostId?: string;
@@ -43,4 +58,64 @@ export async function listMessages(conversationId: string): Promise<MessageDto[]
 
 export async function sendMessage(conversationId: string, content: string) {
   return apiClient.post(`/chat/conversations/${conversationId}/messages`, { content });
+}
+
+export async function ensureRoomForStayRequest(
+  _supabase: unknown,
+  stayRequestId: string
+) {
+  const conversation = await apiClient.post('/chat/conversations', { stayRequestId });
+
+  if (!conversation?.id) {
+    return null;
+  }
+
+  return { roomId: conversation.id as string };
+}
+
+export async function ensureRoomForApplication(
+  _supabase: unknown,
+  applicationId: string
+) {
+  const conversation = await apiClient.post('/chat/conversations', {
+    stayRequestId: applicationId,
+  });
+
+  if (!conversation?.id) {
+    return null;
+  }
+
+  return { roomId: conversation.id as string };
+}
+
+export async function listRoomsForUser(
+  _supabase: unknown,
+  userId: string
+): Promise<RoomListItem[]> {
+  const conversations = await apiClient.get('/chat/conversations');
+
+  return (conversations ?? []).map((conversation: any) => {
+    const messages = Array.isArray(conversation?.messages)
+      ? conversation.messages
+      : [];
+    const lastMessage = messages[0] ?? null;
+
+    const peers: RoomPeer[] = [conversation?.host, conversation?.guest]
+      .filter(Boolean)
+      .filter((peer: any) => peer?.id && peer.id !== userId)
+      .map((peer: any) => ({
+        id: String(peer.id),
+        name: peer.name ?? peer.email ?? null,
+        avatarUrl: peer.avatarUrl ?? null,
+      }));
+
+    return {
+      id: String(conversation?.id ?? ''),
+      roomId: conversation?.id ?? null,
+      stayRequestId: conversation?.stayRequestId ?? null,
+      peers,
+      lastMessageText: lastMessage?.content ?? null,
+      lastMessageAt: lastMessage?.createdAt ?? null,
+    } satisfies RoomListItem;
+  });
 }
