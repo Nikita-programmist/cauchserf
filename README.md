@@ -9,6 +9,26 @@ npm install
 npm run dev
 ```
 
+## Backend
+
+```bash
+cd backend
+npm install
+npm run start:dev
+```
+
+### Переменные окружения для backend (`backend/.env`)
+
+- `DATABASE_URL` — строка подключения к PostgreSQL.
+- `JWT_SECRET` — секрет для подписи JWT.
+- `PORT` — порт, на котором слушает backend.
+- `FRONTEND_URL` — домен фронтенда в продакшене (для CORS).
+- `FRONTEND_URL_LOCAL` — локальный адрес фронтенда (для CORS в dev).
+
+### Переменные окружения для фронтенда
+
+- `NEXT_PUBLIC_API_URL` — базовый URL backend (например, `http://localhost:3001`).
+
 ## Design System
 
 Домик использует стеклянную тему поверх Tailwind и shadcn/ui компонентов.
