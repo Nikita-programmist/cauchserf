@@ -7,7 +7,7 @@ import { SupabaseEnvBanner } from '../components/SupabaseEnvBanner';
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
-    <AuthProvider initialSession={null}>
+    <AuthProvider>
       <SupabaseEnvBanner />
       {children}
     </AuthProvider>
