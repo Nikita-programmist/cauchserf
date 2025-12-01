@@ -1,57 +1,66 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+'use client';
 
-import { getSupabaseClient, hasSupabaseEnv } from '../lib/supabaseClient';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { login as apiLogin, register as apiRegister, logout as apiLogout, getCurrentUser } from '../lib/authClient';
+import { getToken, setToken, clearToken } from '../lib/apiClient';
 
 const AuthContext = createContext({
   user: null,
-  session: null,
   loading: true,
-  hasSupabaseEnv,
-  supabase: null
+  token: null,
+  login: async (_email, _password) => {},
+  register: async (_email, _password, _name) => {},
+  logout: async () => {}
 });
 
-export function AuthProvider({ children, initialSession = null }) {
-  const [session, setSession] = useState(initialSession);
-  const [user, setUser] = useState(initialSession?.user ?? null);
-  const [loading, setLoading] = useState(hasSupabaseEnv);
-  const supabase = useMemo(() => getSupabaseClient(), []);
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [token, setLocalToken] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabase) {
+    const existing = getToken();
+    if (!existing) {
       setLoading(false);
       return;
     }
+    setLocalToken(existing);
+    getCurrentUser()
+      .then((profile) => setUser(profile))
+      .catch(() => clearToken())
+      .finally(() => setLoading(false));
+  }, []);
 
-    let active = true;
+  const login = async (email, password) => {
+    const result = await apiLogin(email, password);
+    if (result?.token) {
+      setToken(result.token);
+      setLocalToken(result.token);
+      setUser(result.user);
+    }
+    return result;
+  };
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setLoading(false);
-    });
+  const register = async (email, password, name) => {
+    const result = await apiRegister(email, password, name);
+    if (result?.token) {
+      setToken(result.token);
+      setLocalToken(result.token);
+      setUser(result.user);
+    }
+    return result;
+  };
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      if (!active) return;
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-    });
-
-    return () => {
-      active = false;
-      subscription?.subscription?.unsubscribe();
-    };
-  }, [supabase]);
+  const logout = async () => {
+    await apiLogout();
+    clearToken();
+    setUser(null);
+    setLocalToken(null);
+  };
 
   const value = useMemo(
-    () => ({
-      user,
-      session,
-      loading,
-      hasSupabaseEnv,
-      supabase
-    }),
-    [user, session, loading, supabase]
+    () => ({ user, token, loading, login, register, logout }),
+    [user, token, loading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

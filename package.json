@@ -5,13 +5,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "db:push": "supabase db push",
     "test": "vitest"
   },
   "dependencies": {
-    "@supabase/auth-helpers-nextjs": "^0.8.5",
-    "@supabase/ssr": "^0.4.0",
-    "@supabase/supabase-js": "^2.39.4",
     "next": "^14",
     "react": "^18",
     "react-dom": "^18",

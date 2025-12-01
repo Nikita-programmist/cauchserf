@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button } from './ui/button';
 import { Popover } from './ui/popover';
 
@@ -14,41 +14,16 @@ const links = [
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { user, supabase, hasSupabaseEnv } = useAuth();
-  const [profileRole, setProfileRole] = useState(null);
+  const { user, logout } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    if (!supabase || !user) {
-      setProfileRole(null);
-      return;
-    }
-
-    let active = true;
-
-    supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!active) return;
-        setProfileRole(data?.role ?? null);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [supabase, user]);
-
   const handleSignOut = async () => {
-    if (!supabase) return;
-    await supabase.auth.signOut();
+    await logout();
     router.push('/');
   };
 
-  const roleLabel = profileRole === 'host' ? 'Хозяин' : profileRole === 'guest' ? 'Гость' : null;
-  const isHost = profileRole === 'host';
+  const roleLabel = user?.role === 'HOST' ? 'Хозяин' : user?.role === 'TRAVELER' ? 'Гость' : null;
+  const isHost = user?.role === 'HOST';
 
   return (
     <header className="sticky top-4 z-40">
@@ -97,7 +72,7 @@ export function Navbar() {
           ) : null}
         </div>
         <div className="hidden gap-3 md:flex">
-          {!user || !hasSupabaseEnv ? (
+          {!user ? (
             <>
               <Button variant="ghost" asChild>
                 <Link href="/login">Вход</Link>
@@ -179,7 +154,7 @@ export function Navbar() {
             </>
           ) : null}
           <div className="mt-3 flex flex-col gap-2">
-            {!user || !hasSupabaseEnv ? (
+            {!user ? (
               <>
                 <Button variant="ghost" className="w-full" asChild>
                   <Link href="/login">Вход</Link>
@@ -195,19 +170,19 @@ export function Navbar() {
                     {roleLabel}
                   </div>
                 ) : null}
-              <Button variant="ghost" className="w-full" asChild>
-                <Link href="/profile">Профиль</Link>
-              </Button>
-              {isHost ? (
                 <Button variant="ghost" className="w-full" asChild>
-                  <Link href="/requests">Заявки</Link>
+                  <Link href="/profile">Профиль</Link>
                 </Button>
-              ) : null}
-              <Button variant="glass" className="w-full" asChild>
-                <Link href="/search">Найти жильё</Link>
-              </Button>
-              {isHost ? (
-                <>
+                {isHost ? (
+                  <Button variant="ghost" className="w-full" asChild>
+                    <Link href="/requests">Заявки</Link>
+                  </Button>
+                ) : null}
+                <Button variant="glass" className="w-full" asChild>
+                  <Link href="/search">Найти жильё</Link>
+                </Button>
+                {isHost ? (
+                  <>
                     <Button variant="ghost" className="w-full" asChild>
                       <Link href="/host/listings/new">Сдать жильё</Link>
                     </Button>

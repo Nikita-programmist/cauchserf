@@ -1,127 +1,46 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { listMessages, sendMessage, MessageDto } from "@/lib/chatService";
 
-type Message = {
-  id: string;
-  content: string;
-  sender_id: string;
-  created_at: string;
-  edited_at?: string | null;
-};
-
-export function useConversation(requestId: string | null) {
-  const [messages, setMessages] = useState<Message[]>([]);
+export function useConversation(conversationId: string | null) {
+  const [messages, setMessages] = useState<MessageDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [roomId, setRoomId] = useState<string | null>(null);
 
   const fetchMessages = useCallback(async () => {
-    if (!requestId) {
+    if (!conversationId) {
       setMessages([]);
       setLoading(false);
-      setRoomId(null);
       return;
     }
-    const params = new URLSearchParams({ requestId, limit: '100', offset: '0' });
-    const res = await fetch(`/api/messages?${params.toString()}`, {
-      credentials: "include",
-    });
-    if (!res.ok) {
+    try {
+      const items = await listMessages(conversationId);
+      setMessages(items ?? []);
+    } catch (err) {
+      console.error(err);
+    } finally {
       setLoading(false);
-      return;
     }
-    const data = await res.json();
-    if (typeof data?.roomId === 'string') {
-      setRoomId(data.roomId);
-    }
-    const normalized = (Array.isArray(data?.messages) ? data.messages : []).map(
-      (item: any) => ({
-        id: item.id,
-        content: item.text ?? item.content ?? '',
-        sender_id: item.sender_id,
-        created_at: item.created_at,
-        edited_at: item.edited_at ?? null,
-      })
-    );
-    setMessages(normalized);
-    setLoading(false);
-  }, [requestId]);
+  }, [conversationId]);
 
   useEffect(() => {
     fetchMessages();
   }, [fetchMessages]);
 
-  const sendMessage = async (text: string) => {
-    if (!text.trim()) return;
-    if (!requestId) return;
-    const res = await fetch(`/api/messages`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ requestId, text }),
-    });
-    if (res.ok) {
-      const data = await res.json().catch(() => null);
-      if (data?.roomId) {
-        setRoomId(data.roomId);
-      }
-      if (data?.message) {
-        const message = {
-          id: data.message.id,
-          content: data.message.text ?? data.message.content ?? text,
-          sender_id: data.message.sender_id,
-          created_at: data.message.created_at,
-          edited_at: data.message.edited_at ?? null,
-        };
-        setMessages((prev) => [...prev, message]);
-      } else {
-        await fetchMessages();
-      }
-    }
-  };
-
-  const editMessage = async (messageId: string, text: string) => {
-    const res = await fetch(`/api/messages/${messageId}`, {
-      method: "PATCH",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    if (res.ok) {
-      const payload = await res.json().catch(() => null);
-      if (payload?.message) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === messageId
-              ? {
-                  ...m,
-                  content: payload.message.text ?? text,
-                  edited_at: payload.message.edited_at ?? new Date().toISOString(),
-                }
-              : m
-          )
-        );
-      }
-    }
-  };
-
-  const deleteMessage = async (messageId: string) => {
-    const res = await fetch(`/api/messages/${messageId}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-    if (res.ok) {
-      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+  const send = async (text: string) => {
+    if (!text.trim() || !conversationId) return;
+    const message = await sendMessage(conversationId, text);
+    if (message) {
+      setMessages((prev) => [...prev, message]);
+    } else {
+      await fetchMessages();
     }
   };
 
   return {
     messages,
     loading,
-    roomId,
-    sendMessage,
-    editMessage,
-    deleteMessage,
+    sendMessage: send,
     refetch: fetchMessages,
   };
 }
