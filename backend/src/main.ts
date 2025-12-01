@@ -6,13 +6,17 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  app.enableCors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-  });
+
   const configService = app.get(ConfigService);
-  const port = configService.get('PORT') ?? 3001;
+  const frontendUrlLocal = configService.get<string>('FRONTEND_URL_LOCAL');
+  const frontendUrl = configService.get<string>('FRONTEND_URL');
+
+  app.enableCors({
+    origin: [frontendUrlLocal, frontendUrl].filter(Boolean),
+    credentials: true,
+  });
+
+  const port = Number(configService.get('PORT')) || 3001;
   await app.listen(port);
 }
 
