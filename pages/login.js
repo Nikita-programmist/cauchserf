@@ -3,76 +3,34 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
-import { supabase } from '../lib/supabaseClient';
+import { useAuth } from '../components/AuthProvider';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { user, login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
-
-    const checkSession = async () => {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      if (!isMounted) return;
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (!isMounted) return;
-
-        if (profile?.role) {
-          router.replace('/profile');
-        } else {
-          router.replace('/onboarding/choose-role');
-        }
-      }
-    };
-
-    checkSession();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [router]);
+    if (user) {
+      router.replace('/profile');
+    }
+  }, [user, router]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
     setLoading(true);
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    setLoading(false);
-
-    if (signInError) {
-      setError(signInError.message);
-      return;
-    }
-
-    const {
-      data: { user }
-    } = await supabase.auth.getUser();
-
-    if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      router.replace(profile?.role ? '/profile' : '/onboarding/choose-role');
+    try {
+      await login(email, password);
+      router.replace('/profile');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось войти');
+    } finally {
+      setLoading(false);
     }
   };
 

@@ -1,45 +1,29 @@
 'use client';
 
-import { useEffect } from 'react';
-
-import { getBrowserSupabase } from '@/lib/supabaseClient';
-
-type RoomMessagePayload = {
-  id: string;
-  room_id: string;
-  user_id: string | null;
-  content: string;
-  created_at: string;
-};
+import { useEffect, useRef } from 'react';
+import { listMessages } from '@/lib/chatService';
 
 export function useRealtimeRoomMessages(
-  roomId: string,
-  onInsert: (payload: { new: RoomMessagePayload }) => void
+  conversationId: string,
+  onInsert: (payload: { new: any }) => void,
+  pollInterval = 5000
 ) {
+  const lastMessageId = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!roomId || roomId === '__none__') {
-      return;
-    }
+    if (!conversationId) return;
 
-    const supabase = getBrowserSupabase();
-    const channel = supabase
-      .channel(`room:${roomId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `room_id=eq.${roomId}`,
-        },
-        (payload) => {
-          onInsert(payload as unknown as { new: RoomMessagePayload });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
+    const fetchLoop = async () => {
+      const messages = await listMessages(conversationId);
+      const latest = messages?.[messages.length - 1];
+      if (latest && latest.id !== lastMessageId.current) {
+        lastMessageId.current = latest.id;
+        onInsert({ new: latest as any });
+      }
     };
-  }, [roomId, onInsert]);
+
+    fetchLoop();
+    const interval = setInterval(fetchLoop, pollInterval);
+    return () => clearInterval(interval);
+  }, [conversationId, onInsert, pollInterval]);
 }
