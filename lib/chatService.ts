@@ -61,7 +61,7 @@ export async function sendMessage(conversationId: string, content: string) {
 }
 
 export async function ensureRoomForStayRequest(
-  _supabase: unknown,
+  _unused: unknown,
   stayRequestId: string
 ) {
   const conversation = await apiClient.post('/chat/conversations', { stayRequestId });
@@ -74,7 +74,7 @@ export async function ensureRoomForStayRequest(
 }
 
 export async function ensureRoomForApplication(
-  _supabase: unknown,
+  _unused: unknown,
   applicationId: string
 ) {
   const conversation = await apiClient.post('/chat/conversations', {
@@ -88,10 +88,7 @@ export async function ensureRoomForApplication(
   return { roomId: conversation.id as string };
 }
 
-export async function listRoomsForUser(
-  _supabase: unknown,
-  userId: string
-): Promise<RoomListItem[]> {
+export async function listRoomsForUser(userId: string): Promise<RoomListItem[]> {
   const conversations = await apiClient.get('/chat/conversations');
 
   return (conversations ?? []).map((conversation: any) => {

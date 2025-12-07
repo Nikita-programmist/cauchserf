@@ -1,20 +1,13 @@
 'use client';
 
-import type { BrowserSupabaseClient } from '@/lib/supabaseBrowser';
-import { getBrowserSupabase, hasBrowserSupabaseEnv } from '@/lib/supabaseBrowser';
+export const hasSupabaseEnv = false;
 
-export { getBrowserSupabase } from '@/lib/supabaseBrowser';
-export const hasSupabaseEnv = hasBrowserSupabaseEnv;
-
-let cachedClient: BrowserSupabaseClient | null = null;
-
-export function getSupabaseClient(): BrowserSupabaseClient | null {
-  if (!cachedClient && hasSupabaseEnv) {
-    cachedClient = getBrowserSupabase();
-  }
-  return cachedClient;
+export function getSupabaseClient() {
+  return null;
 }
 
-export const supabase: BrowserSupabaseClient | null = hasSupabaseEnv
-  ? getBrowserSupabase()
-  : null;
+export function getBrowserSupabase() {
+  return null;
+}
+
+export const supabase = null;

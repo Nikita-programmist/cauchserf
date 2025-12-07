@@ -6,6 +6,7 @@ import { useAuth } from '../../components/AuthProvider';
 import BackToHomeLink from '../../components/BackToHomeLink';
 import { Button } from '../../components/ui/button';
 import { useSendRequest } from '../../hooks/useSendRequest';
+import { getOrCreateConversation } from '../../lib/chatService';
 
 const combineName = (profile) => {
   if (!profile) return 'Хозяин';
@@ -16,7 +17,7 @@ const combineName = (profile) => {
 
 export default function ListingDetailsPage() {
   const router = useRouter();
-  const { supabase, hasSupabaseEnv, user } = useAuth();
+  const { user } = useAuth();
   const { sendRequest, isLoading: isSendingRequest, resetStatus } = useSendRequest();
   const { id } = router.query;
 
@@ -59,23 +60,16 @@ export default function ListingDetailsPage() {
   };
 
   const ensureChatRoom = async (otherUserId) => {
-    const response = await fetch(`/api/chat/room?otherUserId=${otherUserId}`, {
-      method: 'GET',
-      credentials: 'include'
+    const conversation = await getOrCreateConversation({
+      hostId: listing?.host_id,
+      guestId: otherUserId
     });
 
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null);
-      const message = payload?.error || 'Не получилось открыть чат.';
-      throw new Error(message);
-    }
-
-    const payload = await response.json();
-    if (!payload?.roomId) {
+    if (!conversation?.id) {
       throw new Error('Не получилось открыть чат.');
     }
 
-    return payload.roomId;
+    return conversation.id;
   };
 
   const handleContactHost = async () => {

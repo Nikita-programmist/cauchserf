@@ -33,7 +33,9 @@ async function request(path: string, options: RequestInit = {}) {
   const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   if (!res.ok) {
     const message = await res.text();
-    throw new Error(message || 'Request failed');
+    const error = new Error(message || 'Request failed');
+    (error as any).status = res.status;
+    throw error;
   }
   if (res.status === 204) return null;
   return res.json();

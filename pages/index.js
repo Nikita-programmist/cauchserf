@@ -11,6 +11,7 @@ import { Textarea } from '../components/ui/textarea';
 import { TESTIMONIALS } from '../content/testimonials';
 import { useAuth } from '../components/AuthProvider';
 import ChatWindow from '../components/chat/ChatWindow';
+import { listRoomsForUser } from '../lib/chatService';
 
 const journeys = [
   {
@@ -31,7 +32,7 @@ export default function Home() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [roomId, setRoomId] = useState(null);
   const [chatLoading, setChatLoading] = useState(false);
-  const { user, loading: authLoading, hasSupabaseEnv } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
     if (!user) {
@@ -42,32 +43,23 @@ export default function Home() {
     let active = true;
     setChatLoading(true);
 
-    (async () => {
-      try {
-        const res = await fetch('/api/rooms', {
-          credentials: 'include',
-        });
-        if (!res.ok) {
-          throw new Error('Failed to load rooms');
-        }
-        const data = await res.json();
+    listRoomsForUser(user.id)
+      .then((rooms) => {
         if (!active) return;
-        const firstRoom = data?.rooms?.[0]
-          ?? (Array.isArray(data) ? data[0] : null);
-        const resolvedId = firstRoom?.roomId
-          ?? firstRoom?.id
-          ?? null;
+        const firstRoom = rooms?.[0] ?? null;
+        const resolvedId = firstRoom?.roomId ?? firstRoom?.id ?? null;
         setRoomId(resolvedId);
-      } catch (err) {
+      })
+      .catch(() => {
         if (active) {
           setRoomId(null);
         }
-      } finally {
+      })
+      .finally(() => {
         if (active) {
           setChatLoading(false);
         }
-      }
-    })();
+      });
 
     return () => {
       active = false;
@@ -95,11 +87,7 @@ export default function Home() {
                 Общайтесь с путешественниками и хозяевами сразу после входа. Обсуждайте поездки, уточняйте детали проживания и делитесь опытом напрямую в Домике.
               </p>
             </header>
-            {!hasSupabaseEnv ? (
-              <div className="glass-strong rounded-3xl p-6 text-sm text-fg/80">
-                <p>Чат временно недоступен: настройте переменные окружения Supabase, чтобы активировать общение.</p>
-              </div>
-            ) : authLoading || chatLoading ? (
+            {authLoading || chatLoading ? (
               <div className="glass-strong rounded-3xl p-6 text-sm text-fg/80">
                 <p>Загружаем информацию о ваших диалогах…</p>
               </div>

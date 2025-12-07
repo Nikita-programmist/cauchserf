@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
+import { apiClient } from '@/lib/apiClient';
+
 type Role = 'guest' | 'host';
 
 type ProfileSummary = {
@@ -40,15 +42,8 @@ type ApplicationsResponse = {
 };
 
 const fetcher = async ([_key, role]: [string, Role]): Promise<ApplicationsResponse> => {
-  const response = await fetch(`/api/applications?role=${role}`, {
-    credentials: 'include',
-  });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    const message = typeof data?.error === 'string' ? data.error : 'failed_to_load';
-    throw new Error(message);
-  }
-  return response.json();
+  const response = await apiClient.get(`/applications?role=${role}`);
+  return response as ApplicationsResponse;
 };
 
 const statusLabels: Record<ApplicationItem['status'], string> = {
@@ -98,21 +93,7 @@ export default function ApplicationsPageClient() {
       setActionError('');
       setActionLoading(`${id}:${status}`);
       try {
-        const response = await fetch(`/api/applications/${id}`, {
-          method: 'PATCH',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ status }),
-        });
-
-        const payload = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-          const message = typeof payload?.error === 'string' ? payload.error : 'Не удалось обновить статус';
-          throw new Error(message);
-        }
+        const payload = await apiClient.patch(`/applications/${id}`, { status });
 
         await mutate();
 
