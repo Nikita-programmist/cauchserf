@@ -7,6 +7,8 @@ import { getToken, setToken, clearToken } from '../lib/apiClient';
 const AuthContext = createContext({
   user: null,
   loading: true,
+  supabase: null,
+  hasSupabaseEnv: false,
   token: null,
   login: async (_email, _password) => {},
   register: async (_email, _password, _name) => {},
@@ -59,7 +61,16 @@ export function AuthProvider({ children }) {
   };
 
   const value = useMemo(
-    () => ({ user, token, loading, login, register, logout }),
+    () => ({
+      user,
+      token,
+      loading,
+      login,
+      register,
+      logout,
+      supabase: null,
+      hasSupabaseEnv: false
+    }),
     [user, token, loading]
   );
 
