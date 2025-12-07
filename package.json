@@ -3,8 +3,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "build": "npm run build:koyeb",
+    "start": "npm run start:koyeb",
+    "build:koyeb": "cd backend && npm install && npm run build",
+    "start:koyeb": "cd backend && npm run start",
+    "frontend:build": "next build",
+    "frontend:start": "next start",
     "test": "vitest"
   },
   "dependencies": {
