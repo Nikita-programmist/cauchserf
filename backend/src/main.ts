@@ -16,8 +16,10 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const port = Number(configService.get('PORT')) || 3001;
-  await app.listen(port);
+  const port = process.env.PORT
+    ? Number(process.env.PORT)
+    : Number(configService.get('PORT')) || 8000;
+  await app.listen(port, '0.0.0.0');
 }
 
 bootstrap();

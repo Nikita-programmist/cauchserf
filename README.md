@@ -29,6 +29,25 @@ npm run start:dev
 
 - `NEXT_PUBLIC_API_URL` — базовый URL backend (например, `http://localhost:3001`).
 
+## Backend deploy to Koyeb
+
+Для деплоя backend-а на Koyeb используется каталог `backend` с NestJS-приложением. Koyeb задаёт переменную `PORT` автоматически, приложение слушает её (fallback — `8000`) и биндуется на `0.0.0.0`.
+
+Необходимые переменные окружения:
+
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `FRONTEND_URL`
+- `FRONTEND_URL_LOCAL`
+- `NODE_ENV`
+- `PORT` (передаётся Koyeb автоматически)
+
+Локальный запуск, имитирующий сборку/запуск на Koyeb:
+
+```bash
+npm run build:koyeb && npm run start:koyeb
+```
+
 ## Design System
 
 Домик использует стеклянную тему поверх Tailwind и shadcn/ui компонентов.
