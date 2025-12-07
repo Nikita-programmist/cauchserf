@@ -31,21 +31,22 @@ npm run start:dev
 
 ## Backend deploy to Koyeb
 
-Для деплоя backend-а на Koyeb используется каталог `backend` с NestJS-приложением. Koyeb задаёт переменную `PORT` автоматически, приложение слушает её (fallback — `8000`) и биндуется на `0.0.0.0`.
+Backend деплоится на Koyeb через Buildpacks из корня репозитория. Для сборки и запуска используются корневые скрипты `npm run build` и `npm run start`, которые внутри обращаются к каталогу `backend`.
 
-Необходимые переменные окружения:
+Необходимые переменные окружения для backend-а:
 
-- `DATABASE_URL`
+- `DATABASE_URL` (Postgres на Railway)
 - `JWT_SECRET`
 - `FRONTEND_URL`
-- `FRONTEND_URL_LOCAL`
-- `NODE_ENV`
-- `PORT` (передаётся Koyeb автоматически)
+- `NODE_ENV` (обычно `production`)
+
+Koyeb автоматически задаёт `PORT`, приложение слушает её (фоллбек — `8000`) и биндуется на `0.0.0.0`.
 
 Локальный запуск, имитирующий сборку/запуск на Koyeb:
 
 ```bash
-npm run build:koyeb && npm run start:koyeb
+npm run build
+npm run start
 ```
 
 ## Design System

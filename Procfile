@@ -1,1 +1,1 @@
-web: npm run start:koyeb
+web: npm start
