@@ -2,20 +2,19 @@ FROM node:20-alpine
 
 WORKDIR /usr/src/app
 
-# Install dependencies
+# Install dependencies first to leverage Docker layer caching
 COPY package*.json ./
 COPY prisma ./prisma
-RUN npm install --production=false
-RUN npm run prisma:generate
+RUN npm ci
 
-# Copy source code
+# Copy remaining project files
 COPY tsconfig*.json ./
 COPY src ./src
 
-ENV NODE_ENV=production
-ENV PORT=8000
-
+# Build the application
 RUN npm run build
+
+ENV NODE_ENV=production
 
 EXPOSE 8000
 
