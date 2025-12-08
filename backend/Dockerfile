@@ -1,24 +1,21 @@
-# Build stage
-FROM node:20-alpine AS build
-WORKDIR /app
+FROM node:20-alpine
 
-COPY backend/package*.json ./
-RUN npm install
+WORKDIR /usr/src/app
 
-COPY backend/ ./
-RUN npm run build
+# Install dependencies
+COPY package*.json ./
+COPY prisma ./prisma
+RUN npm install --production=false
 
-# Production stage
-FROM node:20-alpine AS production
-WORKDIR /app
-
-COPY --from=build /app/package*.json ./
-RUN npm install --omit=dev
-
-COPY --from=build /app/dist ./dist
+# Copy source code
+COPY tsconfig*.json ./
+COPY src ./src
 
 ENV NODE_ENV=production
 ENV PORT=8000
+
+RUN npm run build
+
 EXPOSE 8000
 
-CMD ["node", "dist/main.js"]
+CMD ["npm", "run", "start:prod"]
