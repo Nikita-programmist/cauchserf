@@ -28,7 +28,6 @@ model User {
   avatarUrl     String?
   role          UserRole       @default(TRAVELER)
   hostProfile   HostProfile?
-  places        Place[]        @relation("HostPlaces")
   stayRequests  StayRequest[]  @relation("GuestStayRequests")
   hostingStays  StayRequest[]  @relation("HostStayRequests")
   conversationsAsHost Conversation[] @relation("HostConversation")
@@ -81,15 +80,16 @@ model StayRequest {
   message       String?
   status        StayStatus  @default(PENDING)
   roomId        String?
-  conversation  Conversation?
+  conversation  Conversation? @relation("StayRequestConversation")
+  reviews       Review[]     @relation("StayRequestReviews")
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 }
 
 model Conversation {
   id            String       @id @default(uuid())
-  stayRequestId String?
-  stayRequest   StayRequest? @relation(fields: [stayRequestId], references: [id])
+  stayRequestId String?      @unique
+  stayRequest   StayRequest? @relation("StayRequestConversation", fields: [stayRequestId], references: [id])
   hostId        String
   host          User         @relation("HostConversation", fields: [hostId], references: [id])
   guestId       String
@@ -116,7 +116,7 @@ model Review {
   targetUserId  String
   targetUser    User     @relation("TargetReviews", fields: [targetUserId], references: [id])
   stayRequestId String?
-  stayRequest   StayRequest? @relation(fields: [stayRequestId], references: [id])
+  stayRequest   StayRequest? @relation("StayRequestReviews", fields: [stayRequestId], references: [id])
   rating        Int
   comment       String?
   createdAt     DateTime @default(now())
