@@ -6,6 +6,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 COPY prisma ./prisma
 RUN npm install --production=false
+RUN npm run prisma:generate
 
 # Copy source code
 COPY tsconfig*.json ./
