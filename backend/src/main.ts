@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 
@@ -15,8 +15,10 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const port = process.env.PORT || 8000;
+  const port = process.env.PORT ? Number(process.env.PORT) : 8000;
   await app.listen(port, '0.0.0.0');
+
+  Logger.log(`🚀 Server is running on http://0.0.0.0:${port}`, 'Bootstrap');
 }
 
 bootstrap();
