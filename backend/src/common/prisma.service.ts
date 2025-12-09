@@ -6,6 +6,24 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   private readonly logger = new Logger(PrismaService.name);
 
   async onModuleInit() {
+    if (!process.env.DATABASE_URL) {
+      const fallbackDbUrl =
+        process.env.SUPABASE_DB_URL ||
+        process.env.SUPABASE_DATABASE_URL ||
+        process.env.POSTGRES_URL ||
+        process.env.POSTGRES_PRISMA_URL;
+
+      if (fallbackDbUrl) {
+        process.env.DATABASE_URL = fallbackDbUrl;
+        this.logger.warn('DATABASE_URL is not set. Falling back to alternative database connection variable.');
+      } else {
+        this.logger.error(
+          'DATABASE_URL is not set. Please configure DATABASE_URL or SUPABASE_DB_URL/POSTGRES_URL in the environment.'
+        );
+        throw new Error('Database connection URL is missing.');
+      }
+    }
+
     const maxAttempts = 5;
     const delayMs = 2000;
 
