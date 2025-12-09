@@ -1,20 +1,27 @@
-FROM node:20-alpine
-
+# Build stage
+FROM node:20-alpine AS builder
 WORKDIR /usr/src/app
 
-# Install dependencies first to leverage Docker layer caching
 COPY package*.json ./
 COPY prisma ./prisma
 RUN npm ci
 
-# Copy remaining project files
 COPY tsconfig*.json ./
 COPY src ./src
 
-# Build the application
 RUN npm run build
 
+# Production stage
+FROM node:20-alpine AS runner
+WORKDIR /usr/src/app
+
 ENV NODE_ENV=production
+
+COPY package*.json ./
+COPY prisma ./prisma
+RUN npm ci --omit=dev
+
+COPY --from=builder /usr/src/app/dist ./dist
 
 EXPOSE 8000
 
