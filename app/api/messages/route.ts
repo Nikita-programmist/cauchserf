@@ -61,6 +61,32 @@ async function assertRequestParticipation(
   return { request: data };
 }
 
+async function resolveRequestByConversation(
+  conversationId: string,
+  userId: string
+) {
+  const admin = getServerSupabaseAdmin();
+
+  const { data: request, error } = await admin
+    .from('stay_requests')
+    .select('id, traveler_id, host_id, conversation_id')
+    .eq('conversation_id', conversationId)
+    .maybeSingle();
+
+  if (error || !request) {
+    return { error: NextResponse.json({ error: 'Access denied' }, { status: 403 }) };
+  }
+
+  const participant =
+    request.traveler_id === userId || request.host_id === userId;
+
+  if (!participant) {
+    return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  }
+
+  return { request };
+}
+
 type StayRequestIdentifiers = Pick<
   Database['public']['Tables']['stay_requests']['Row'],
   'id' | 'traveler_id' | 'host_id' | 'conversation_id'
@@ -112,9 +138,11 @@ export async function POST(req: Request) {
     const payload = await req.json().catch(() => null);
     const requestId =
       typeof payload?.requestId === 'string' ? payload.requestId : '';
+    const conversationId =
+      typeof payload?.conversationId === 'string' ? payload.conversationId : '';
     const text = typeof payload?.text === 'string' ? payload.text.trim() : '';
 
-    if (!requestId) {
+    if (!requestId && !conversationId) {
       return NextResponse.json({ error: 'requestId is required' }, { status: 400 });
     }
 
@@ -122,7 +150,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Message cannot be empty' }, { status: 400 });
     }
 
-    const participation = await assertRequestParticipation(requestId, user.id);
+    const participation = requestId
+      ? await assertRequestParticipation(requestId, user.id)
+      : await resolveRequestByConversation(conversationId, user.id);
     if ('error' in participation) {
       return participation.error;
     }
@@ -169,12 +199,15 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const requestId = searchParams.get('requestId');
+    const conversationId = searchParams.get('conversationId');
 
-    if (!requestId) {
+    if (!requestId && !conversationId) {
       return NextResponse.json({ error: 'requestId is required' }, { status: 400 });
     }
 
-    const participation = await assertRequestParticipation(requestId, user.id);
+    const participation = requestId
+      ? await assertRequestParticipation(requestId, user.id)
+      : await resolveRequestByConversation(conversationId!, user.id);
     if ('error' in participation) {
       return participation.error;
     }

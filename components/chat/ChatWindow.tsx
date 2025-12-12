@@ -110,8 +110,14 @@ export default function ChatWindow({
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
 
-  const fetchMessages = useCallback(async (id: string) => {
-    const params = new URLSearchParams({ requestId: id, limit: "100", offset: "0" });
+  const fetchMessages = useCallback(async (id: string, by: "request" | "conversation") => {
+    const params = new URLSearchParams({ limit: "100", offset: "0" });
+
+    if (by === "request") {
+      params.set("requestId", id);
+    } else {
+      params.set("conversationId", id);
+    }
     const res = await fetch(`/api/messages?${params.toString()}`, {
       credentials: "include",
     });
@@ -139,13 +145,13 @@ export default function ChatWindow({
   }, []);
 
   useEffect(() => {
-    if (!requestId) {
+    if (!requestId && !conversationId) {
       setMessages([]);
       setError(null);
       setSubmitError(null);
       setText("");
       setPending(false);
-      setActiveConversationId(conversationId ?? null);
+      setActiveConversationId(null);
       setLoading(false);
       return;
     }
@@ -160,7 +166,13 @@ export default function ChatWindow({
 
     (async () => {
       try {
-        const normalized = await fetchMessages(requestId);
+        const identifier = requestId ?? conversationId;
+        const normalized = identifier
+          ? await fetchMessages(
+              identifier,
+              requestId ? "request" : "conversation"
+            )
+          : [];
         if (!active) return;
         setMessages(normalized);
         setError(null);
@@ -242,7 +254,8 @@ export default function ChatWindow({
 
   const handleSend = async () => {
     const value = text.trim();
-    if (!value || pending || !requestId) return;
+    const identifier = requestId ?? conversationId;
+    if (!value || pending || !identifier) return;
 
     setPending(true);
     setSubmitError(null);
@@ -254,7 +267,11 @@ export default function ChatWindow({
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({ requestId, text: value }),
+        body: JSON.stringify(
+          requestId
+            ? { requestId, text: value }
+            : { conversationId: conversationId, text: value }
+        ),
       });
 
       const data = await res.json().catch(() => null);
@@ -322,7 +339,7 @@ export default function ChatWindow({
     );
   }, [header, participant]);
 
-  if (!requestId) {
+  if (!requestId && !conversationId) {
     return (
       <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white/50 p-6 text-center text-sm text-slate-500">
         Выберите заявку, чтобы начать переписку
