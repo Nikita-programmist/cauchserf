@@ -8,9 +8,16 @@ function readCookieToken() {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function ensureApiPrefix(baseUrl: string | undefined) {
+  const base = (baseUrl || '/api').replace(/\/$/, '');
+  const hasApiSegment = /\/api(\/|$)/.test(base);
+  if (hasApiSegment) return base;
+  return `${base}/api`;
+}
+
 export function getApiBaseUrl() {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
-  return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  const baseUrlWithPrefix = ensureApiPrefix(process.env.NEXT_PUBLIC_API_URL);
+  return baseUrlWithPrefix.endsWith('/') ? baseUrlWithPrefix.slice(0, -1) : baseUrlWithPrefix;
 }
 
 function buildApiUrl(path: string) {
