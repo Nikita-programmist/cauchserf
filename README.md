@@ -27,7 +27,8 @@ npm run start:dev
 
 ### Переменные окружения для фронтенда
 
-- `NEXT_PUBLIC_API_URL` — базовый URL backend (например, `http://localhost:3001`).
+- `NEXT_PUBLIC_API_URL` — базовый URL backend (например, `http://localhost:3001`). При отсутствии суффикса
+  `/api` он добавится автоматически.
 
 ## Backend deploy to Koyeb
 
