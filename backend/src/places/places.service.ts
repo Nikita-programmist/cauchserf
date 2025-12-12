@@ -6,6 +6,10 @@ import { CreatePlaceDto } from './dto/create-place.dto';
 export class PlacesService {
   constructor(private prisma: PrismaService) {}
 
+  search(city?: string) {
+    return this.list({ city });
+  }
+
   list(filters: { city?: string; country?: string; guests?: number }) {
     return this.prisma.place.findMany({
       where: {
@@ -16,6 +20,16 @@ export class PlacesService {
       include: {
         hostProfile: { include: { user: { select: { id: true, email: true, name: true } } } }
       },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  async listForHost(userId: string) {
+    const hostProfile = await this.prisma.hostProfile.findUnique({ where: { userId } });
+    if (!hostProfile) return [];
+
+    return this.prisma.place.findMany({
+      where: { hostProfileId: hostProfile.id },
       orderBy: { createdAt: 'desc' }
     });
   }

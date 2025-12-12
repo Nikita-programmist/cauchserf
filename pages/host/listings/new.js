@@ -2,183 +2,94 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
+import BackToHomeLink from '../../../components/BackToHomeLink';
 import { useAuth } from '../../../components/AuthProvider';
-import UploadField from '../../../components/UploadField';
-import { Button } from '../../../components/ui/button';
+import { apiClient } from '../../../lib/apiClient';
 
 const initialFormState = {
   title: '',
-  city: '',
   description: '',
-  guests: 1
+  city: '',
+  country: '',
+  address: '',
+  capacity: 1,
+  pricePerNight: ''
 };
 
 export default function NewListingPage() {
   const router = useRouter();
-  const { supabase, hasSupabaseEnv } = useAuth();
+  const { token, loading: authLoading, refreshUser } = useAuth();
 
   const [form, setForm] = useState(initialFormState);
-  const [photoFiles, setPhotoFiles] = useState([]);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [profileRole, setProfileRole] = useState(null);
-  const [userId, setUserId] = useState(null);
-  const [checkingAccess, setCheckingAccess] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!supabase || !hasSupabaseEnv) {
-      setError('Подключение к Supabase недоступно.');
-      setCheckingAccess(false);
+    if (authLoading) return;
+    if (!token) {
+      router.replace('/login');
       return;
     }
 
-    let active = true;
-
-    const loadUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!active) return;
-
-      const currentUser = data?.user;
-      if (!currentUser) {
-        router.replace('/login');
-        return;
+    const checkRole = async () => {
+      try {
+        const profile = await refreshUser();
+        if (!profile) {
+          router.replace('/login');
+          return;
+        }
+        if (profile.role !== 'HOST') {
+          setError('Создавать объявления могут только хосты.');
+        }
+      } catch (err) {
+        setError(err?.message || 'Не удалось проверить доступ');
       }
-
-      setUserId(currentUser.id);
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', currentUser.id)
-        .maybeSingle();
-
-      if (!active) return;
-
-      const role = profile?.role ?? null;
-      setProfileRole(role);
-
-      if (role !== 'host') {
-        router.replace('/profile');
-      }
-
-      setCheckingAccess(false);
     };
 
-    loadUser();
-
-    return () => {
-      active = false;
-    };
-  }, [supabase, hasSupabaseEnv, router]);
+    checkRole();
+  }, [authLoading, token, refreshUser, router]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleGuestsChange = (event) => {
-    const value = Number(event.target.value);
-    setForm((prev) => ({ ...prev, guests: Math.min(10, Math.max(1, value || 1)) }));
-  };
-
-  const handlePhotosChange = (files) => {
-    if (!Array.isArray(files)) {
-      setPhotoFiles([]);
-      return;
-    }
-    setPhotoFiles(files.slice(0, 4));
-  };
-
-  const uploadPhotos = async (userIdValue) => {
-    if (!photoFiles.length) return [];
-
-    const uploadedUrls = [];
-
-    for (const [index, file] of photoFiles.entries()) {
-      const hasExtension = file.name.includes('.');
-      const extension = hasExtension ? file.name.split('.').pop() : '';
-      const safeExtension = extension ? `.${extension}` : '';
-      const filePath = `${userIdValue}/${Date.now()}_${index}${safeExtension}`;
-      const { error: uploadError } = await supabase.storage.from('listings').upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      const { data: publicData } = supabase.storage.from('listings').getPublicUrl(filePath);
-      if (publicData?.publicUrl) {
-        uploadedUrls.push(publicData.publicUrl);
-      }
-    }
-
-    return uploadedUrls;
+  const handleCapacityChange = (event) => {
+    const value = Number(event.target.value) || 1;
+    setForm((prev) => ({ ...prev, capacity: Math.max(1, value) }));
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    setError('');
 
-    if (!supabase || !hasSupabaseEnv) {
-      setError('Нет подключения к Supabase. Попробуйте позже.');
-      return;
-    }
-
-    if (!userId) {
-      setError('Не удалось определить пользователя.');
-      return;
-    }
-
-    if (profileRole !== 'host') {
-      setError('Создавать объявления могут только хозяева.');
-      return;
-    }
-
-    const trimmedTitle = form.title.trim();
-    const trimmedCity = form.city.trim();
-
-    if (!trimmedTitle || !trimmedCity) {
-      setError('Название и город обязательны.');
+    if (!form.title.trim() || !form.city.trim() || !form.country.trim()) {
+      setError('Название, город и страна обязательны.');
       return;
     }
 
     setSubmitting(true);
-    setError('');
-
-    let photoUrls = [];
-
     try {
-      photoUrls = await uploadPhotos(userId);
-    } catch (uploadError) {
-      console.error(uploadError);
-      alert('Не удалось загрузить фотографии. Попробуйте ещё раз.');
+      const payload = {
+        title: form.title.trim(),
+        description: form.description.trim() || undefined,
+        city: form.city.trim(),
+        country: form.country.trim(),
+        address: form.address.trim() || undefined,
+        capacity: form.capacity || undefined,
+        pricePerNight: form.pricePerNight ? Number(form.pricePerNight) : undefined
+      };
+      const created = await apiClient.post('/places', payload);
+      if (created?.id) {
+        router.replace(`/listings/${created.id}`);
+      } else {
+        setError('Не удалось сохранить объявление');
+      }
+    } catch (err) {
+      setError(err?.message || 'Не удалось сохранить объявление');
+    } finally {
       setSubmitting(false);
-      return;
     }
-
-    const { data, error: insertError } = await supabase
-      .from('listings')
-      .insert({
-        host_id: userId,
-        city: trimmedCity,
-        title: trimmedTitle,
-        description: form.description,
-        guests: form.guests,
-        photos: photoUrls
-      })
-      .select('id')
-      .maybeSingle();
-
-    setSubmitting(false);
-
-    if (insertError || !data) {
-      console.error(insertError);
-      setError(insertError?.message || 'Не удалось сохранить объявление.');
-      return;
-    }
-
-    router.push(`/listings/${data.id}`);
   };
 
   return (
@@ -187,82 +98,105 @@ export default function NewListingPage() {
         <title>Новое объявление — Домик</title>
       </Head>
       <main className="mx-auto mt-16 flex w-full max-w-3xl flex-col gap-6 px-6 pb-16">
+        <BackToHomeLink className="self-start" />
         <section className="glass flex flex-col gap-6 px-8 py-10">
           <div>
             <h1 className="text-3xl font-semibold text-fg">Создайте объявление</h1>
-            <p className="mt-2 text-sm text-fg/70">
-              Поделитесь своим пространством с путешественниками Домика.
-            </p>
+            <p className="mt-2 text-sm text-fg/70">Заполните данные о вашем жилье, чтобы гости могли вас найти.</p>
           </div>
-          {checkingAccess ? (
-            <p className="text-sm text-fg/70">Проверяем доступ…</p>
-          ) : null}
           {error ? <p className="text-sm text-red-400">{error}</p> : null}
-          <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
             <label className="flex flex-col gap-2 text-sm text-fg/80">
-              <span>Название *</span>
+              Название
               <input
                 type="text"
                 name="title"
                 value={form.title}
                 onChange={handleChange}
-                placeholder="Например, Уютная студия у моря"
-                className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
-                required
+                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
               />
             </label>
             <label className="flex flex-col gap-2 text-sm text-fg/80">
-              <span>Город *</span>
-              <input
-                type="text"
-                name="city"
-                value={form.city}
-                onChange={handleChange}
-                placeholder="Где находится жильё?"
-                className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
-                required
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-fg/80">
-              <span>Описание</span>
+              Описание
               <textarea
                 name="description"
                 value={form.description}
                 onChange={handleChange}
-                rows={5}
-                placeholder="Расскажите о жилье, особенностях и правилах"
-                className="rounded-2xl border border-white/20 bg-white/5 px-4 py-3 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+                rows={4}
+                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
               />
             </label>
-            <label className="flex flex-col gap-2 text-sm text-fg/80">
-              <span>Гостей</span>
-              <input
-                type="number"
-                name="guests"
-                value={form.guests}
-                onChange={handleGuestsChange}
-                min={1}
-                max={10}
-                className="w-28 rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-sm text-fg focus:border-white/60 focus:outline-none"
-              />
-            </label>
-            <div className="flex flex-col gap-2 text-sm text-fg/80">
-              <span>Фотографии (до 4)</span>
-              <UploadField
-                multiple
-                maxFiles={4}
-                onFilesChange={handlePhotosChange}
-                onLimitExceeded={() => alert('Можно загрузить не более 4 фотографий.')}
-                helperText="Можно загрузить до 4 фотографий."
-              />
+            <div className="flex flex-col gap-3 md:flex-row">
+              <label className="flex flex-1 flex-col gap-2 text-sm text-fg/80">
+                Город
+                <input
+                  type="text"
+                  name="city"
+                  value={form.city}
+                  onChange={handleChange}
+                  className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+                />
+              </label>
+              <label className="flex flex-1 flex-col gap-2 text-sm text-fg/80">
+                Страна
+                <input
+                  type="text"
+                  name="country"
+                  value={form.country}
+                  onChange={handleChange}
+                  className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+                />
+              </label>
             </div>
-            <div className="flex items-center gap-3">
-              <Button type="submit" disabled={submitting || checkingAccess}>
-                {submitting ? 'Сохраняем…' : 'Опубликовать'}
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => router.back()} disabled={submitting}>
+            <label className="flex flex-col gap-2 text-sm text-fg/80">
+              Адрес (по желанию)
+              <input
+                type="text"
+                name="address"
+                value={form.address}
+                onChange={handleChange}
+                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+              />
+            </label>
+            <div className="flex flex-col gap-3 md:flex-row">
+              <label className="flex flex-1 flex-col gap-2 text-sm text-fg/80">
+                Вместимость
+                <input
+                  type="number"
+                  min="1"
+                  name="capacity"
+                  value={form.capacity}
+                  onChange={handleCapacityChange}
+                  className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+                />
+              </label>
+              <label className="flex flex-1 flex-col gap-2 text-sm text-fg/80">
+                Цена за ночь (₽)
+                <input
+                  type="number"
+                  min="0"
+                  name="pricePerNight"
+                  value={form.pricePerNight}
+                  onChange={handleChange}
+                  className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+                />
+              </label>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => router.push('/host/listings')}
+                className="rounded-xl border border-white/30 px-5 py-2 text-sm font-semibold text-fg transition hover:border-white/60 hover:bg-white/10"
+              >
                 Отмена
-              </Button>
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="rounded-xl bg-white/80 px-5 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {submitting ? 'Сохраняем…' : 'Сохранить'}
+              </button>
             </div>
           </form>
         </section>

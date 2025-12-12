@@ -7,6 +7,7 @@ export interface AuthUser {
   role?: string | null;
   avatarUrl?: string | null;
   hostProfile?: any;
+  guestProfile?: any;
 }
 
 export async function register(email: string, password: string, name?: string) {
@@ -26,5 +27,13 @@ export async function logout() {
 }
 
 export async function getCurrentUser() {
-  return apiClient.get('/users/me');
+  return apiClient.get('/me');
+}
+
+export async function completeOnboarding(role: 'GUEST' | 'HOST') {
+  return apiClient.post('/me/onboarding', { role });
+}
+
+export async function updateProfile(payload: { name?: string; bio?: string; city?: string; country?: string; avatarUrl?: string }) {
+  return apiClient.patch('/me', payload);
 }

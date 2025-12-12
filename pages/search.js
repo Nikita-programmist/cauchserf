@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { useAuth } from '../components/AuthProvider';
+import { apiClient } from '../lib/apiClient';
 
 const truncate = (text, limit = 160) => {
   if (!text) return '';
@@ -11,7 +12,6 @@ const truncate = (text, limit = 160) => {
 };
 
 export default function SearchPage() {
-  const { supabase, hasSupabaseEnv } = useAuth();
   const [cityInput, setCityInput] = useState('');
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -29,32 +29,19 @@ export default function SearchPage() {
       return;
     }
 
-    if (!supabase || !hasSupabaseEnv) {
-      setError('Поиск недоступен: отсутствует соединение с Supabase.');
-      setListings([]);
-      setHasSearched(false);
-      return;
-    }
-
     setLoading(true);
     setError('');
     setHasSearched(true);
 
-    const normalized = city.toLowerCase();
-
-    const { data, error: searchError } = await supabase
-      .from('listings')
-      .select('id, title, city, guests, description, photos')
-      .ilike('city', `%${normalized}%`);
-
-    if (searchError) {
-      setError(searchError.message || 'Не удалось выполнить поиск.');
+    try {
+      const data = await apiClient.get(`/places/search?city=${encodeURIComponent(city)}`);
+      setListings(Array.isArray(data) ? data : []);
+    } catch (requestError) {
+      setError(requestError?.message || 'Не удалось выполнить поиск.');
       setListings([]);
-    } else {
-      setListings(data ?? []);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
@@ -98,6 +85,7 @@ export default function SearchPage() {
           <section className="grid gap-6 md:grid-cols-2">
             {listings.map((listing) => {
               const cover = Array.isArray(listing.photos) ? listing.photos[0] : null;
+              const guestsCount = listing.capacity ?? listing.guests;
               return (
                 <Link
                   key={listing.id}
@@ -122,7 +110,7 @@ export default function SearchPage() {
                       <h2 className="text-lg font-semibold text-fg">{listing.title}</h2>
                       <p className="text-sm text-fg/70">{listing.city}</p>
                     </div>
-                    <p className="text-sm text-fg/80">Максимум гостей: {listing.guests}</p>
+                    <p className="text-sm text-fg/80">Максимум гостей: {guestsCount ?? '—'}</p>
                     {listing.description ? (
                       <p className="text-sm text-fg/70">{truncate(listing.description)}</p>
                     ) : null}

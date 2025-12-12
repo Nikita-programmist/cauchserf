@@ -1,169 +1,102 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import { supabase } from '../../lib/supabaseClient';
 import BackToHomeLink from '../../components/BackToHomeLink';
-import UploadField from '../../components/UploadField';
-
-const genderOptions = [
-  { value: '', label: 'Выберите пол' },
-  { value: 'male', label: 'Мужской' },
-  { value: 'female', label: 'Женский' },
-  { value: 'other', label: 'Другое' }
-];
+import { useAuth } from '../../components/AuthProvider';
+import { updateProfile as updateProfileRequest } from '../../lib/authClient';
 
 export default function EditProfilePage() {
   const router = useRouter();
-  const [role, setRole] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const { token, refreshUser, loading: authLoading } = useAuth();
+
+  const [name, setName] = useState('');
   const [city, setCity] = useState('');
+  const [country, setCountry] = useState('');
   const [bio, setBio] = useState('');
-  const [age, setAge] = useState('');
-  const [gender, setGender] = useState('');
-  const [beds, setBeds] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
-  const [avatarFile, setAvatarFile] = useState(null);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
 
-  useEffect(() => {
-    let isActive = true;
-
-    const loadProfile = async () => {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-
-      if (!isActive) return;
-
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const user = await refreshUser();
       if (!user) {
         router.replace('/login');
         return;
       }
-
-      const { data, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!isActive) return;
-
-      if (profileError) {
-        setError(profileError.message);
-        setLoading(false);
+      if (!user.role) {
+        router.replace('/onboarding');
         return;
       }
-
-      if (!data) {
-        router.replace('/onboarding/choose-role');
+      const profileData = user.hostProfile || user.guestProfile || {};
+      setName(user.name || '');
+      setCity(profileData.city || '');
+      setCountry(profileData.country || '');
+      setBio(profileData.bio || '');
+      setAvatarUrl(user.avatarUrl || '');
+    } catch (err) {
+      if (err?.status === 404 && err?.body?.code === 'PROFILE_NOT_CREATED') {
+        router.replace('/onboarding');
         return;
       }
-
-      setRole(data.role ?? '');
-      setFirstName(data.first_name ?? '');
-      setLastName(data.last_name ?? '');
-      setCity(data.city ?? '');
-      setBio(data.bio ?? '');
-      setAge(data.age ? String(data.age) : '');
-      setGender(data.gender ?? '');
-      setBeds(data.beds ? String(data.beds) : '');
-      setAvatarUrl(data.avatar_url ?? '');
+      if (err?.status === 401) {
+        router.replace('/login');
+        return;
+      }
+      setError(err?.message || 'Не удалось загрузить профиль');
+    } finally {
       setLoading(false);
-    };
+    }
+  }, [refreshUser, router]);
 
-    loadProfile();
-
-    return () => {
-      isActive = false;
-    };
-  }, [router]);
-
-  const showBedsField = role === 'host';
-
-  const handleFileChange = (file) => {
-    setAvatarFile(file);
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setError('');
-    setSaving(true);
-
-    const {
-      data: { user }
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setSaving(false);
+  useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
       router.replace('/login');
       return;
     }
+    loadProfile();
+  }, [authLoading, token, loadProfile, router]);
 
-    let uploadedAvatarUrl = avatarUrl || null;
-
-    if (avatarFile) {
-      const fileExt = avatarFile.name.split('.').pop();
-      const fileName = `${Date.now()}_avatar.${fileExt || 'jpg'}`;
-      const filePath = `${user.id}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, avatarFile, {
-        upsert: false
-      });
-
-      if (uploadError) {
-        setError(uploadError.message);
-        setSaving(false);
-        return;
-      }
-
-      const {
-        data: { publicUrl }
-      } = supabase.storage.from('avatars').getPublicUrl(filePath);
-
-      uploadedAvatarUrl = publicUrl;
-    }
-
-    const updates = {
-      id: user.id,
-      role,
-      first_name: firstName.trim() || null,
-      last_name: lastName.trim() || null,
-      city: city.trim() || null,
-      bio: bio.trim() || null,
-      age: age ? Number(age) : null,
-      gender: gender || null,
-      avatar_url: uploadedAvatarUrl,
-      beds: showBedsField ? (beds ? Number(beds) : null) : null
-    };
-
-    const { error: upsertError } = await supabase.from('profiles').upsert(updates);
-
-    if (upsertError) {
-      setError(upsertError.message);
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await updateProfileRequest({ name: name.trim(), bio: bio.trim(), city: city.trim(), country: country.trim(), avatarUrl: avatarUrl.trim() || undefined });
+      await refreshUser();
+      router.replace('/profile');
+    } catch (err) {
+      setError(err?.message || 'Не удалось сохранить профиль');
+    } finally {
       setSaving(false);
-      return;
     }
-
-    if (role) {
-      const { error: metadataError } = await supabase.auth.updateUser({ data: { role } });
-      if (metadataError) {
-        console.error(metadataError);
-      }
-    }
-
-    setSaving(false);
-    router.replace('/profile');
   };
 
   if (loading) {
     return (
       <main className="mx-auto mt-16 flex w-full max-w-2xl flex-col gap-6 px-6">
         <BackToHomeLink className="self-start" />
-        <div className="glass px-8 py-10 text-center text-sm text-fg/70">Загружаем…</div>
+        <div className="glass px-8 py-10 text-center text-sm text-fg/70">
+          {error ? (
+            <div className="flex flex-col gap-3">
+              <p>{error}</p>
+              <button
+                type="button"
+                onClick={loadProfile}
+                className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-fg hover:border-white/60 hover:bg-white/10"
+              >
+                Повторить
+              </button>
+            </div>
+          ) : (
+            'Загружаем профиль…'
+          )}
+        </div>
       </main>
     );
   }
@@ -172,7 +105,18 @@ export default function EditProfilePage() {
     return (
       <main className="mx-auto mt-16 flex w-full max-w-2xl flex-col gap-6 px-6">
         <BackToHomeLink className="self-start" />
-        <div className="glass px-8 py-10 text-center text-sm text-red-400">{error}</div>
+        <div className="glass px-8 py-10 text-center text-sm text-red-400">
+          <div className="flex flex-col gap-3">
+            <p>{error}</p>
+            <button
+              type="button"
+              onClick={loadProfile}
+              className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-fg hover:border-white/60 hover:bg-white/10"
+            >
+              Повторить попытку
+            </button>
+          </div>
+        </div>
       </main>
     );
   }
@@ -188,101 +132,78 @@ export default function EditProfilePage() {
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-fg/60">Профиль</p>
             <h1 className="mt-2 text-2xl font-semibold text-fg">Обновите информацию о себе</h1>
-            <p className="text-sm text-fg/70">Расскажите нам немного больше, чтобы гостям и путешественникам было легче найти вас.</p>
+            <p className="text-sm text-fg/70">Расскажите немного о себе, чтобы другим было проще познакомиться с вами.</p>
           </div>
           <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+            <label className="flex flex-col gap-2 text-sm text-fg/80">
+              Имя
+              <input
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Ваше имя"
+                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+              />
+            </label>
             <div className="flex flex-col gap-4 md:flex-row">
               <label className="flex flex-1 flex-col gap-2 text-sm text-fg/80">
-                Имя
+                Город
                 <input
                   type="text"
-                  value={firstName}
-                  onChange={(event) => setFirstName(event.target.value)}
-                  placeholder="Например, Анна"
+                  value={city}
+                  onChange={(event) => setCity(event.target.value)}
+                  placeholder="Например, Москва"
                   className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
                 />
               </label>
               <label className="flex flex-1 flex-col gap-2 text-sm text-fg/80">
-                Фамилия
+                Страна
                 <input
                   type="text"
-                  value={lastName}
-                  onChange={(event) => setLastName(event.target.value)}
-                  placeholder="Например, Смирнова"
+                  value={country}
+                  onChange={(event) => setCountry(event.target.value)}
+                  placeholder="Россия"
                   className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
                 />
               </label>
             </div>
-            <label className="flex flex-col gap-2 text-sm text-fg/80">
-              Город
-              <input
-                type="text"
-                value={city}
-                onChange={(event) => setCity(event.target.value)}
-                placeholder="Москва"
-                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-fg/80">
-              Возраст
-              <input
-                type="number"
-                min="0"
-                value={age}
-                onChange={(event) => setAge(event.target.value)}
-                placeholder="27"
-                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-fg/80">
-              Пол
-              <select
-                value={gender}
-                onChange={(event) => setGender(event.target.value)}
-                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg focus:border-white/60 focus:outline-none"
-              >
-                {genderOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
             <label className="flex flex-col gap-2 text-sm text-fg/80">
               О себе
               <textarea
                 value={bio}
                 onChange={(event) => setBio(event.target.value)}
+                placeholder="Расскажите немного о себе"
+                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
                 rows={4}
-                placeholder="Коротко расскажите о себе и своём образе жизни"
-                className="w-full rounded-2xl border border-white/20 bg-white/5 px-3 py-3 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
               />
             </label>
-            {showBedsField ? (
-              <label className="flex flex-col gap-2 text-sm text-fg/80">
-                Спальных мест
-                <input
-                  type="number"
-                  min="0"
-                  value={beds}
-                  onChange={(event) => setBeds(event.target.value)}
-                  placeholder="Например, 2"
-                  className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
-                />
-              </label>
-            ) : null}
-            <div className="flex flex-col gap-2 text-sm text-fg/80">
-              <span>Аватар</span>
-              <UploadField initialPreviewUrl={avatarUrl} onFilesChange={handleFileChange} />
-            </div>
+            <label className="flex flex-col gap-2 text-sm text-fg/80">
+              URL аватара (по желанию)
+              <input
+                type="text"
+                value={avatarUrl}
+                onChange={(event) => setAvatarUrl(event.target.value)}
+                placeholder="https://..."
+                className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
+              />
+            </label>
             {error ? <p className="text-sm text-red-400">{error}</p> : null}
-            <button
-              type="submit"
-              disabled={saving}
-              className="self-start rounded-xl bg-white/80 px-6 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {saving ? 'Сохраняем…' : 'Сохранить'}
-            </button>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => router.push('/profile')}
+                className="rounded-xl border border-white/30 px-5 py-2 text-sm font-semibold text-fg transition hover:border-white/60 hover:bg-white/10"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-xl bg-white/80 px-5 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {saving ? 'Сохраняем…' : 'Сохранить'}
+              </button>
+            </div>
           </form>
         </div>
       </main>

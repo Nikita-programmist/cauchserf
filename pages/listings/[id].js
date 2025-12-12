@@ -1,339 +1,81 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { useAuth } from '../../components/AuthProvider';
 import BackToHomeLink from '../../components/BackToHomeLink';
-import { Button } from '../../components/ui/button';
-import { useSendRequest } from '../../hooks/useSendRequest';
-import { getOrCreateConversation } from '../../lib/chatService';
-
-const combineName = (profile) => {
-  if (!profile) return 'Хозяин';
-  const { first_name: firstName, last_name: lastName } = profile;
-  const fullName = `${firstName ?? ''} ${lastName ?? ''}`.trim();
-  return fullName || 'Хозяин';
-};
+import { apiClient } from '../../lib/apiClient';
 
 export default function ListingDetailsPage() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { sendRequest, isLoading: isSendingRequest, resetStatus } = useSendRequest();
   const { id } = router.query;
 
-  const [listing, setListing] = useState(null);
-  const [hostProfile, setHostProfile] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [place, setPlace] = useState(null);
   const [error, setError] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [guestMessage, setGuestMessage] = useState('');
-  const [statusMessage, setStatusMessage] = useState({ type: 'idle', text: '' });
-  const [isContactingHost, setIsContactingHost] = useState(false);
-  const [contactError, setContactError] = useState('');
-
-  const clearStatusMessage = () => {
-    setStatusMessage((current) =>
-      current.type === 'idle'
-        ? current
-        : {
-            type: 'idle',
-            text: ''
-          }
-    );
-    resetStatus();
-  };
-
-  const handleStartDateChange = (event) => {
-    clearStatusMessage();
-    setStartDate(event.target.value);
-  };
-
-  const handleEndDateChange = (event) => {
-    clearStatusMessage();
-    setEndDate(event.target.value);
-  };
-
-  const handleMessageChange = (event) => {
-    clearStatusMessage();
-    setGuestMessage(event.target.value);
-  };
-
-  const ensureChatRoom = async (otherUserId) => {
-    const conversation = await getOrCreateConversation({
-      hostId: listing?.host_id,
-      guestId: otherUserId
-    });
-
-    if (!conversation?.id) {
-      throw new Error('Не получилось открыть чат.');
-    }
-
-    return conversation.id;
-  };
-
-  const handleContactHost = async () => {
-    setContactError('');
-
-    if (!user?.id) {
-      router.push(`/login?redirect=/listings/${id}`);
-      return;
-    }
-
-    if (!listing?.host_id) {
-      setContactError('Не удалось определить хозяина объявления.');
-      return;
-    }
-
-    try {
-      setIsContactingHost(true);
-      const roomId = await ensureChatRoom(listing.host_id);
-      router.push(`/chat/${roomId}`);
-    } catch (fetchError) {
-      setContactError(fetchError.message || 'Не получилось открыть чат.');
-    } finally {
-      setIsContactingHost(false);
-    }
-  };
-
-  const handleRequestSubmit = async (event) => {
-    event.preventDefault();
-    clearStatusMessage();
-
-    if (!startDate || !endDate) {
-      setStatusMessage({ type: 'error', text: 'Пожалуйста, укажите даты заезда и выезда.' });
-      return;
-    }
-
-    if (new Date(startDate) > new Date(endDate)) {
-      setStatusMessage({ type: 'error', text: 'Дата выезда должна быть позже даты заезда.' });
-      return;
-    }
-
-    if (!guestMessage.trim()) {
-      setStatusMessage({ type: 'error', text: 'Пожалуйста, напишите сообщение хозяину.' });
-      return;
-    }
-
-    const { error: requestError, roomId: createdRoomId } = await sendRequest({
-      listingId: listing?.id,
-      hostId: listing?.host_id,
-      startDate,
-      endDate,
-      message: guestMessage.trim()
-    });
-
-    if (requestError) {
-      setStatusMessage({ type: 'error', text: 'Не получилось отправить заявку. Попробуйте позже.' });
-      return;
-    }
-
-    setStartDate('');
-    setEndDate('');
-    setGuestMessage('');
-
-    if (!listing?.host_id) {
-      setStatusMessage({ type: 'error', text: 'Не получилось открыть чат. Попробуйте позже.' });
-      return;
-    }
-
-    if (createdRoomId) {
-      router.push(`/chat/${createdRoomId}`);
-      return;
-    }
-
-    try {
-      const roomId = await ensureChatRoom(listing.host_id);
-      router.push(`/chat/${roomId}`);
-    } catch (fetchError) {
-      setStatusMessage({
-        type: 'error',
-        text: fetchError.message || 'Не получилось открыть чат. Попробуйте позже.'
-      });
-    }
-  };
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!hasSupabaseEnv || !supabase) {
-      setError('Подключение к Supabase недоступно.');
-      setLoading(false);
-      return;
-    }
+    if (!id) return;
 
-    if (!id) {
-      return;
-    }
-
-    let active = true;
-    setLoading(true);
-    setError('');
-
-    const fetchListing = async () => {
-      const { data, error: listingError } = await supabase
-        .from('listings')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-
-      if (!active) return;
-
-      if (listingError || !data) {
-        setError(listingError?.message || 'Объявление не найдено.');
-        setListing(null);
-        setHostProfile(null);
+    const load = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const data = await apiClient.get(`/places/${id}`);
+        setPlace(data);
+      } catch (err) {
+        setError(err?.message || 'Не удалось загрузить объявление');
+      } finally {
         setLoading(false);
-        return;
       }
-
-      setListing(data);
-
-      if (data.host_id) {
-        const { data: hostData } = await supabase
-          .from('profiles')
-          .select('id, first_name, last_name, avatar_url')
-          .eq('id', data.host_id)
-          .maybeSingle();
-
-        if (!active) return;
-
-        setHostProfile(hostData ?? null);
-      } else {
-        setHostProfile(null);
-      }
-
-      setLoading(false);
     };
 
-    fetchListing();
-
-    return () => {
-      active = false;
-    };
-  }, [id, supabase, hasSupabaseEnv]);
-
-  const photos = useMemo(() => (Array.isArray(listing?.photos) ? listing.photos.slice(0, 4) : []), [listing?.photos]);
-  const isHostViewing = Boolean(user?.id && listing?.host_id && listing.host_id === user.id);
+    load();
+  }, [id]);
 
   return (
     <>
       <Head>
-        <title>{listing?.title ? `${listing.title} — Домик` : 'Объявление — Домик'}</title>
+        <title>{place?.title ? `${place.title} — Домик` : 'Объявление — Домик'}</title>
       </Head>
-      <main className="mx-auto mt-16 flex w-full max-w-5xl flex-col gap-8 px-6 pb-16">
+      <main className="mx-auto mt-16 flex w-full max-w-4xl flex-col gap-6 px-6 pb-16">
         <BackToHomeLink className="self-start" />
         {loading ? (
-          <section className="glass px-8 py-10 text-sm text-fg/70">Загружаем объявление…</section>
+          <div className="glass px-8 py-10 text-center text-sm text-fg/70">Загружаем объявление…</div>
         ) : null}
-        {error ? (
-          <section className="glass px-8 py-10 text-sm text-red-400">{error}</section>
-        ) : null}
-        {!loading && !error && listing ? (
-          <>
-            <article className="glass flex flex-col gap-8 px-8 py-10">
-              {photos.length > 0 ? (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {photos.map((photo, index) => (
-                    <div key={photo} className="overflow-hidden rounded-3xl border border-white/15 bg-white/10">
-                      <img src={photo} alt={`${listing.title} фото ${index + 1}`} className="h-56 w-full object-cover" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-3xl border border-white/15 bg-white/5 px-6 py-10 text-center text-sm text-fg/60">
-                  Фото пока нет
-                </div>
-              )}
-              <div className="flex flex-col gap-4">
-                <div>
-                  <h1 className="text-3xl font-semibold text-fg">{listing.title}</h1>
-                  <p className="text-sm text-fg/70">{listing.city}</p>
-                </div>
-                <p className="text-sm text-fg/80">Гостей: {listing.guests}</p>
-                {listing.description ? (
-                  <p className="text-base leading-relaxed text-fg/80">{listing.description}</p>
-                ) : null}
+        {error ? <div className="glass px-8 py-10 text-center text-sm text-red-400">{error}</div> : null}
+        {!loading && !error && place ? (
+          <section className="glass flex flex-col gap-6 px-8 py-10">
+            <div className="flex flex-col gap-3">
+              <p className="text-xs uppercase tracking-[0.3em] text-fg/60">Объявление</p>
+              <h1 className="text-3xl font-semibold text-fg">{place.title}</h1>
+              <p className="text-sm text-fg/70">{place.city}{place.country ? `, ${place.country}` : ''}</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-white/20 bg-white/5 p-4 text-sm text-fg/80">
+                <p className="text-xs uppercase tracking-wide text-fg/60">Описание</p>
+                <p className="mt-2">{place.description || 'Описание не указано.'}</p>
               </div>
-              <div className="rounded-3xl border border-white/15 bg-white/5 px-6 py-5">
-                <h2 className="text-lg font-semibold text-fg">Хозяин</h2>
-                <div className="mt-4 flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/15 bg-white/10">
-                      {hostProfile?.avatar_url ? (
-                        <img src={hostProfile.avatar_url} alt={combineName(hostProfile)} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-fg/60">Нет фото</div>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-base font-medium text-fg">{combineName(hostProfile)}</p>
-                      <p className="text-sm text-fg/70">Опытный хозяин Домика</p>
-                    </div>
-                  </div>
-                  {!isHostViewing ? (
-                    <Button onClick={handleContactHost} disabled={isContactingHost} variant="solid">
-                      {isContactingHost ? 'Открываем…' : 'Написать хозяину'}
-                    </Button>
-                  ) : null}
-                </div>
-                {contactError ? (
-                  <p className="mt-3 text-sm text-red-400">{contactError}</p>
-                ) : null}
+              <div className="rounded-2xl border border-white/20 bg-white/5 p-4 text-sm text-fg/80">
+                <p className="text-xs uppercase tracking-wide text-fg/60">Вместимость</p>
+                <p className="mt-2">{place.capacity ? `${place.capacity} гостей` : 'Не указано'}</p>
               </div>
-            </article>
-            {isHostViewing ? (
-              <section className="glass px-8 py-8 text-sm text-fg/70">
-                Это ваше объявление. Путешественники смогут попроситься в гости и вы увидите их заявки во вкладке «Заявки».
-              </section>
-            ) : (
-              <section className="glass flex flex-col gap-6 px-8 py-10">
-                <div>
-                  <h2 className="text-lg font-semibold text-fg">План поездки</h2>
-                  <p className="mt-1 text-sm text-fg/70">Расскажите, когда хотите приехать и пару слов о поездке.</p>
-                </div>
-                <form className="flex flex-col gap-5" onSubmit={handleRequestSubmit}>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="flex flex-col gap-2 text-sm text-fg/80">
-                      Дата заезда
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={handleStartDateChange}
-                        required
-                        className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg focus:border-white/60 focus:outline-none"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-2 text-sm text-fg/80">
-                      Дата выезда
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={handleEndDateChange}
-                        required
-                        className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg focus:border-white/60 focus:outline-none"
-                      />
-                    </label>
-                  </div>
-                  <label className="flex flex-col gap-2 text-sm text-fg/80">
-                    Сообщение хозяину
-                    <textarea
-                      value={guestMessage}
-                      onChange={handleMessageChange}
-                      rows={4}
-                      placeholder="Расскажите немного о себе и цели поездки"
-                      className="w-full rounded-2xl border border-white/20 bg-white/5 px-3 py-3 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
-                      required
-                    />
-                  </label>
-                  <Button type="submit" disabled={isSendingRequest} className="self-start">
-                    {isSendingRequest ? 'Отправляем…' : 'Попроситься в гости'}
-                  </Button>
-                </form>
-                {statusMessage.type === 'error' ? (
-                  <p className="text-sm text-red-400">{statusMessage.text}</p>
-                ) : null}
-              </section>
-            )}
-          </>
+              <div className="rounded-2xl border border-white/20 bg-white/5 p-4 text-sm text-fg/80">
+                <p className="text-xs uppercase tracking-wide text-fg/60">Адрес</p>
+                <p className="mt-2">{place.address || 'Не указан'}</p>
+              </div>
+              <div className="rounded-2xl border border-white/20 bg-white/5 p-4 text-sm text-fg/80">
+                <p className="text-xs uppercase tracking-wide text-fg/60">Стоимость</p>
+                <p className="mt-2">{place.pricePerNight ? `${place.pricePerNight} ₽ за ночь` : 'По запросу'}</p>
+              </div>
+            </div>
+            {place.hostProfile ? (
+              <div className="rounded-2xl border border-white/20 bg-white/5 p-4 text-sm text-fg/80">
+                <p className="text-xs uppercase tracking-wide text-fg/60">Хозяин</p>
+                <p className="mt-2 text-base text-fg">{place.hostProfile.user?.name || 'Хозяин Домика'}</p>
+                <p className="text-sm text-fg/70">{place.hostProfile.user?.email || '—'}</p>
+              </div>
+            ) : null}
+          </section>
         ) : null}
       </main>
     </>

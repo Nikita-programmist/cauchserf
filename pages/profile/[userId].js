@@ -7,7 +7,7 @@ import { apiClient } from '../../lib/apiClient';
 
 const roleLabels = {
   HOST: 'Хозяин',
-  TRAVELER: 'Путешественник'
+  GUEST: 'Путешественник'
 };
 
 export default function PublicProfilePage() {
@@ -38,6 +38,7 @@ export default function PublicProfilePage() {
   const fullName = profile?.name || '';
   const roleLabel = profile ? roleLabels[profile.role] ?? '—' : '—';
   const isHost = profile?.role === 'HOST';
+  const profileDetails = profile?.hostProfile || profile?.guestProfile;
 
   return (
     <>
@@ -93,15 +94,15 @@ export default function PublicProfilePage() {
                   <p className="text-xs uppercase tracking-wide text-fg/60">Email</p>
                   <p className="mt-1 text-base text-fg">{profile?.email || '—'}</p>
                 </div>
-                {profile?.hostProfile ? (
+                {profileDetails ? (
                   <div className="flex flex-wrap gap-6">
                     <div>
                       <p className="text-xs uppercase tracking-wide text-fg/60">Город</p>
-                      <p className="mt-1 text-base text-fg">{profile.hostProfile.city || '—'}</p>
+                      <p className="mt-1 text-base text-fg">{profileDetails.city || '—'}</p>
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-wide text-fg/60">Страна</p>
-                      <p className="mt-1 text-base text-fg">{profile.hostProfile.country || '—'}</p>
+                      <p className="mt-1 text-base text-fg">{profileDetails.country || '—'}</p>
                     </div>
                   </div>
                 ) : null}
@@ -109,7 +110,7 @@ export default function PublicProfilePage() {
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-fg/60">О себе</p>
-              <p className="mt-2 text-sm text-fg/80">{profile?.hostProfile?.bio || 'Нет описания'}</p>
+              <p className="mt-2 text-sm text-fg/80">{profileDetails?.bio || 'Нет описания'}</p>
             </div>
           </section>
         ) : null}
