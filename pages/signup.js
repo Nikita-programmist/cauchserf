@@ -3,10 +3,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
-import { supabase } from '../lib/supabaseClient';
+import { useAuth } from '../components/AuthProvider';
 
 export default function SignUpPage() {
   const router = useRouter();
+  const { user, register } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -14,36 +15,10 @@ export default function SignUpPage() {
   const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
-    let isMounted = true;
-
-    const checkSession = async () => {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      if (!isMounted) return;
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (!isMounted) return;
-
-        if (profile?.role) {
-          router.replace('/profile');
-        } else {
-          router.replace('/onboarding/choose-role');
-        }
-      }
-    };
-
-    checkSession();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [router]);
+    if (user) {
+      router.replace('/profile');
+    }
+  }, [user, router]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -51,24 +26,28 @@ export default function SignUpPage() {
     setSuccessMessage('');
     setLoading(true);
 
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`
+    try {
+      await register(email, password);
+      setSuccessMessage('Регистрация прошла успешно! Перенаправляем...');
+      setEmail('');
+      setPassword('');
+      router.replace('/profile');
+    } catch (err) {
+      const body = err?.body ?? err?.response?.data;
+      const messageFromBody =
+        (typeof body?.message === 'string' && body.message) ||
+        (Array.isArray(body?.message) ? body.message.join(', ') : null);
+
+      if (messageFromBody) {
+        setError(messageFromBody);
+      } else if (err?.message) {
+        setError(err.message);
+      } else {
+        setError('Ошибка регистрации');
       }
-    });
-
-    setLoading(false);
-
-    if (signUpError) {
-      setError(signUpError.message);
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    setSuccessMessage('Проверьте почту для подтверждения.');
-    setEmail('');
-    setPassword('');
   };
 
   return (

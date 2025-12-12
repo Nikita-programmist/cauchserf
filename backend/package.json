@@ -12,7 +12,7 @@
     "prisma:generate": "prisma generate",
     "db:deploy": "prisma migrate deploy || prisma db push",
     "prisma:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
-    "start:prod": "node dist/main.js"
+    "start:prod": "npm run prisma:generate && npm run db:deploy && node dist/main.js"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",

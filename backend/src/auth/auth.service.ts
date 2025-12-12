@@ -12,7 +12,11 @@ export class AuthService {
   async register(dto: RegisterDto) {
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existing) {
-      throw new ConflictException('User already exists');
+      throw new ConflictException({
+        statusCode: 409,
+        message: 'User with this email already exists',
+        code: 'USER_EXISTS'
+      });
     }
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
@@ -28,11 +32,19 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (!user) {
-      throw new UnauthorizedException({ code: 'USER_NOT_FOUND', message: 'User not registered' });
+      throw new UnauthorizedException({
+        statusCode: 401,
+        message: 'Пользователь не найден',
+        code: 'USER_NOT_FOUND'
+      });
     }
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) {
-      throw new UnauthorizedException({ code: 'INVALID_PASSWORD', message: 'Wrong password' });
+      throw new UnauthorizedException({
+        statusCode: 401,
+        message: 'Неверный пароль',
+        code: 'INVALID_PASSWORD'
+      });
     }
     return this.buildAuthResponse(user.id, user.email, user.name ?? null);
   }

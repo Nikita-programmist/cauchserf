@@ -6,10 +6,11 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
-  const allowedOrigins = new Set([
-    'http://localhost:3000',
-    'https://vercel.app',
-  ]);
+  const allowedOrigins = new Set(
+    [process.env.FRONTEND_URL, process.env.FRONTEND_URL_LOCAL, 'http://localhost:3000'].filter(
+      Boolean
+    ) as string[]
+  );
 
   const isAllowedVercelOrigin = (origin: string) =>
     /^https:\/\/([a-zA-Z0-9-]+\.)*vercel\.app$/i.test(origin);
@@ -28,7 +29,7 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization']
   });
 
   const port = process.env.PORT ? Number(process.env.PORT) : 8000;

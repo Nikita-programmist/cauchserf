@@ -28,27 +28,20 @@ export default function LoginPage() {
       await login(email, password);
       router.replace('/profile');
     } catch (err) {
-      let code = null;
-      if (err && typeof err === 'object') {
-        const body = err.body ?? err.response?.data ?? null;
-        if (body) {
-          if (typeof body === 'string') {
-            try {
-              const parsed = JSON.parse(body);
-              code = parsed?.message?.code ?? parsed?.code ?? null;
-            } catch (_) {
-              code = null;
-            }
-          } else if (typeof body === 'object') {
-            code = body?.message?.code ?? body?.code ?? null;
-          }
-        }
-      }
+      const body = err?.body ?? err?.response?.data;
+      const code = body?.code;
+      const messageFromBody =
+        (typeof body?.message === 'string' && body.message) ||
+        (Array.isArray(body?.message) ? body.message.join(', ') : null);
 
       if (code === 'USER_NOT_FOUND') {
         setError('Пользователь ещё не зарегистрирован');
       } else if (code === 'INVALID_PASSWORD') {
         setError('Неверный пароль');
+      } else if (messageFromBody) {
+        setError(messageFromBody);
+      } else if (err?.message) {
+        setError(err.message);
       } else {
         setError('Ошибка входа');
       }
