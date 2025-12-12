@@ -22,7 +22,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
-  const targetUrl = new URL(req.url || '', process.env.API_URL);
+  const incomingPath = (req.url || '').replace(/^\/api(\/)?/, '/');
+  const normalizedPath = incomingPath.startsWith('/') ? incomingPath : `/${incomingPath}`;
+  const targetUrl = new URL(normalizedPath, process.env.API_URL);
 
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
