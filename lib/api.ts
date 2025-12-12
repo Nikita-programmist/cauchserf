@@ -9,11 +9,14 @@ function readCookieToken() {
 }
 
 export function getApiBaseUrl() {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!baseUrl) {
-    throw new Error('API_URL не настроен. Укажите NEXT_PUBLIC_API_URL в переменных окружения.');
-  }
-  return baseUrl;
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
+  return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+}
+
+function buildApiUrl(path: string) {
+  const baseUrl = getApiBaseUrl();
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${baseUrl}${normalizedPath}`;
 }
 
 export function getToken() {
@@ -53,7 +56,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
   const token = getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const url = `${getApiBaseUrl()}${path}`;
+  const url = buildApiUrl(path);
   const attempt = async () =>
     fetchWithTimeout(url, {
       ...options,

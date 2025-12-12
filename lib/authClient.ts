@@ -27,13 +27,13 @@ export async function logout() {
 }
 
 export async function getCurrentUser() {
-  return apiClient.get('/api/me');
+  return apiClient.get('/me');
 }
 
 export async function completeOnboarding(role: 'GUEST' | 'HOST') {
-  return apiClient.post('/api/me/onboarding', { role });
+  return apiClient.post('/me/onboarding', { role });
 }
 
 export async function updateProfile(payload: { name?: string; bio?: string; city?: string; country?: string; avatarUrl?: string }) {
-  return apiClient.patch('/api/me', payload);
+  return apiClient.patch('/me', payload);
 }
