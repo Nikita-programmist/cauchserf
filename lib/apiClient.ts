@@ -1,5 +1,13 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 const TOKEN_KEY = 'cauchserf_jwt';
+const REQUEST_TIMEOUT_MS = 15000;
+
+export function getApiBaseUrl() {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!baseUrl) {
+    throw new Error('API_URL не настроен. Укажите NEXT_PUBLIC_API_URL в переменных окружения.');
+  }
+  return baseUrl;
+}
 
 export function getToken() {
   if (typeof window === 'undefined') return null;
@@ -17,41 +25,55 @@ export function clearToken() {
 }
 
 async function request(path: string, options: RequestInit = {}) {
-  if (!API_BASE_URL) {
-    const message =
-      'NEXT_PUBLIC_API_URL is not set. Please configure the backend URL in your environment.';
-    console.warn(message);
-    throw new Error(message);
-  }
-
   const token = getToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...(options.headers || {})
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
-  if (!res.ok) {
-    const responseText = await res.text();
-    let parsedBody: any = null;
-    try {
-      parsedBody = responseText ? JSON.parse(responseText) : null;
-    } catch (err) {
-      parsedBody = null;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${getApiBaseUrl()}${path}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+      signal: controller.signal
+    });
+
+    if (!res.ok) {
+      const contentType = res.headers.get('content-type');
+      const isJson = contentType && contentType.includes('application/json');
+      const parsedBody = isJson ? await res.json().catch(() => null) : null;
+      const responseText = !parsedBody ? await res.text().catch(() => '') : '';
+
+      const messageFromBody =
+        typeof parsedBody?.message === 'string'
+          ? parsedBody.message
+          : Array.isArray(parsedBody?.message)
+            ? parsedBody?.message?.join(', ')
+            : typeof parsedBody?.error === 'string'
+              ? parsedBody.error
+              : null;
+
+      const errorMessage = messageFromBody || responseText || 'Request failed';
+      const error = new Error(errorMessage);
+      (error as any).status = res.status;
+      (error as any).body = parsedBody ?? responseText;
+      throw error;
     }
 
-    const errorMessage =
-      (parsedBody && typeof parsedBody === 'object' && parsedBody.message) ||
-      responseText ||
-      'Request failed';
-
-    const error = new Error(typeof errorMessage === 'string' ? errorMessage : 'Request failed');
-    (error as any).status = res.status;
-    (error as any).body = parsedBody ?? responseText;
+    if (res.status === 204) return null;
+    return res.json();
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error('Превышено время ожидания ответа от сервера. Попробуйте ещё раз.');
+    }
     throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  if (res.status === 204) return null;
-  return res.json();
 }
 
 export const apiClient = {
