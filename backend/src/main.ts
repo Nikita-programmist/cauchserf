@@ -1,18 +1,34 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
-  const configService = app.get(ConfigService);
-  const frontendUrl = configService.get<string>('FRONTEND_URL');
+  const allowedOrigins = new Set([
+    'http://localhost:3000',
+    'https://vercel.app',
+  ]);
+
+  const isAllowedVercelOrigin = (origin: string) =>
+    /^https:\/\/([a-zA-Z0-9-]+\.)*vercel\.app$/i.test(origin);
 
   app.enableCors({
-    origin: frontendUrl ?? '*',
-    credentials: !!frontendUrl,
+    origin: (origin, callback) => {
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.has(origin) || isAllowedVercelOrigin(origin)) {
+        return callback(null, true);
+      }
+
+      callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
   const port = process.env.PORT ? Number(process.env.PORT) : 8000;
