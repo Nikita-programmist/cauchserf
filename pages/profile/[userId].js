@@ -1,19 +1,13 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 import BackToHomeLink from '../../components/BackToHomeLink';
-import { supabase } from '../../lib/supabaseClient';
-
-const genderLabels = {
-  male: 'Мужской',
-  female: 'Женский',
-  other: 'Другое'
-};
+import { apiClient } from '../../lib/apiClient';
 
 const roleLabels = {
-  host: 'Хозяин',
-  traveler: 'Путешественник'
+  HOST: 'Хозяин',
+  TRAVELER: 'Путешественник'
 };
 
 export default function PublicProfilePage() {
@@ -23,51 +17,33 @@ export default function PublicProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const loadProfile = useCallback(async () => {
     if (!userId) return;
-
-    let isActive = true;
-
-    const loadProfile = async () => {
-      const { data, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, role, first_name, last_name, city, bio, avatar_url, age, gender, beds')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (!isActive) return;
-
-      if (profileError) {
-        setError(profileError.message);
-        setLoading(false);
-        return;
-      }
-
+    setError('');
+    setLoading(true);
+    try {
+      const data = await apiClient.get(`/users/${userId}`);
       setProfile(data ?? null);
+    } catch (err) {
+      setError(err?.message || 'Не удалось загрузить профиль');
+    } finally {
       setLoading(false);
-    };
-
-    loadProfile();
-
-    return () => {
-      isActive = false;
-    };
+    }
   }, [userId]);
 
-  const fullName = profile ? `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim() : '';
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  const fullName = profile?.name || '';
   const roleLabel = profile ? roleLabels[profile.role] ?? '—' : '—';
-  const genderLabel = profile ? genderLabels[profile.gender] ?? null : null;
-  const ageDisplay = profile && profile.age != null ? profile.age : '—';
-  const bedsDisplay = profile && profile.beds != null ? profile.beds : '—';
-  const isHost = profile?.role === 'host';
+  const isHost = profile?.role === 'HOST';
 
   return (
     <>
       <Head>
         <title>
-          {profile?.first_name || profile?.last_name
-            ? `${fullName || 'Профиль пользователя'} — Домик`
-            : 'Профиль пользователя — Домик'}
+          {profile?.name ? `${fullName || 'Профиль пользователя'} — Домик` : 'Профиль пользователя — Домик'}
         </title>
       </Head>
       <main className="mx-auto mt-16 flex w-full max-w-2xl flex-col gap-6 px-6 pb-16">
@@ -76,7 +52,18 @@ export default function PublicProfilePage() {
           <div className="glass px-8 py-10 text-center text-sm text-fg/70">Загружаем профиль…</div>
         ) : null}
         {error ? (
-          <div className="glass px-8 py-10 text-center text-sm text-red-400">{error}</div>
+          <div className="glass px-8 py-10 text-center text-sm text-red-400">
+            <div className="flex flex-col gap-3">
+              <p>{error}</p>
+              <button
+                type="button"
+                onClick={loadProfile}
+                className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-fg hover:border-white/60 hover:bg-white/10"
+              >
+                Повторить попытку
+              </button>
+            </div>
+          </div>
         ) : null}
         {!loading && !error && !profile ? (
           <div className="glass px-8 py-10 text-center text-sm text-fg/70">Профиль не найден.</div>
@@ -94,8 +81,8 @@ export default function PublicProfilePage() {
             <div className="flex flex-col gap-6 md:flex-row">
               <div className="flex-shrink-0">
                 <div className="h-32 w-32 overflow-hidden rounded-2xl border border-white/20 bg-white/5">
-                  {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} alt={fullName || 'Аватар'} className="h-full w-full object-cover" />
+                  {profile?.avatarUrl ? (
+                    <img src={profile.avatarUrl} alt={fullName || 'Аватар'} className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-sm text-fg/60">Нет фото</div>
                   )}
@@ -103,30 +90,26 @@ export default function PublicProfilePage() {
               </div>
               <div className="flex flex-1 flex-col gap-4 text-sm text-fg/80">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-fg/60">Город</p>
-                  <p className="mt-1 text-base text-fg">{profile?.city || '—'}</p>
+                  <p className="text-xs uppercase tracking-wide text-fg/60">Email</p>
+                  <p className="mt-1 text-base text-fg">{profile?.email || '—'}</p>
                 </div>
-                <div className="flex flex-wrap gap-6">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-fg/60">Возраст</p>
-                    <p className="mt-1 text-base text-fg">{ageDisplay}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-fg/60">Пол</p>
-                    <p className="mt-1 text-base text-fg">{genderLabel || '—'}</p>
-                  </div>
-                  {isHost ? (
+                {profile?.hostProfile ? (
+                  <div className="flex flex-wrap gap-6">
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-fg/60">Спальных мест</p>
-                      <p className="mt-1 text-base text-fg">{bedsDisplay}</p>
+                      <p className="text-xs uppercase tracking-wide text-fg/60">Город</p>
+                      <p className="mt-1 text-base text-fg">{profile.hostProfile.city || '—'}</p>
                     </div>
-                  ) : null}
-                </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-fg/60">Страна</p>
+                      <p className="mt-1 text-base text-fg">{profile.hostProfile.country || '—'}</p>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-fg/60">О себе</p>
-              <p className="mt-2 text-sm text-fg/80">{profile?.bio || 'Нет описания'}</p>
+              <p className="mt-2 text-sm text-fg/80">{profile?.hostProfile?.bio || 'Нет описания'}</p>
             </div>
           </section>
         ) : null}

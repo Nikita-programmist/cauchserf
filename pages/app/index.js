@@ -1,53 +1,99 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
-import { supabase } from '../../lib/supabaseClient';
+import { useAuth } from '../../components/AuthProvider';
+
+const roleLabels = {
+  HOST: 'Хозяин',
+  TRAVELER: 'Путешественник'
+};
 
 export default function AppHomePage() {
   const router = useRouter();
+  const { logout, refreshUser, loading: authLoading, token } = useAuth();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!isMounted) return;
-      const currentUser = data?.user;
-
-      if (!currentUser) {
+  const loadUser = useCallback(async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const profile = await refreshUser();
+      if (!profile) {
         router.replace('/login');
         return;
       }
-
-      setUser(currentUser);
+      if (!profile.role) {
+        router.replace('/onboarding/role');
+        return;
+      }
+      setUser(profile);
+    } catch (err) {
+      setError(err?.message || 'Не удалось загрузить профиль');
+    } finally {
       setLoading(false);
-    };
+    }
+  }, [refreshUser, router]);
 
-    fetchUser();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [router]);
+  useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+    loadUser();
+  }, [authLoading, token, loadUser, router]);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await logout();
     router.push('/login');
   };
 
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
-        <div className="glass w-full max-w-sm px-6 py-8 text-center text-sm text-fg/70">Загружаем профиль…</div>
+        <div className="glass w-full max-w-sm px-6 py-8 text-center text-sm text-fg/70">
+          {error ? (
+            <div className="flex flex-col gap-3">
+              <p>{error}</p>
+              <button
+                type="button"
+                onClick={loadUser}
+                className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-fg hover:border-white/60 hover:bg-white/10"
+              >
+                Повторить попытку
+              </button>
+            </div>
+          ) : (
+            'Загружаем профиль…'
+          )}
+        </div>
       </main>
     );
   }
 
-  const metadata = user?.user_metadata ?? {};
-  const roleLabel = metadata.role === 'host' ? 'Хозяин' : metadata.role === 'traveler' ? 'Путешественник' : '—';
+  if (error) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-6">
+        <div className="glass w-full max-w-sm px-6 py-8 text-center text-sm text-red-400">
+          <div className="flex flex-col gap-3">
+            <p>{error}</p>
+            <button
+              type="button"
+              onClick={loadUser}
+              className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-fg hover:border-white/60 hover:bg-white/10"
+            >
+              Повторить попытку
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const roleLabel = user?.role ? roleLabels[user.role] ?? user.role : '—';
 
   return (
     <>
@@ -66,24 +112,14 @@ export default function AppHomePage() {
               <p className="text-xs uppercase tracking-wide text-fg/60">Роль</p>
               <p className="mt-2 text-lg font-semibold text-fg">{roleLabel}</p>
             </div>
-            {metadata.city ? (
-              <div className="rounded-2xl border border-white/20 bg-white/5 px-5 py-4">
-                <p className="text-xs uppercase tracking-wide text-fg/60">Город</p>
-                <p className="mt-2 text-lg font-semibold text-fg">{metadata.city}</p>
-              </div>
-            ) : null}
-            {metadata.bio ? (
-              <div className="rounded-2xl border border-white/20 bg-white/5 px-5 py-4 md:col-span-2">
-                <p className="text-xs uppercase tracking-wide text-fg/60">О себе</p>
-                <p className="mt-2 text-sm text-fg/80">{metadata.bio}</p>
-              </div>
-            ) : null}
-            {metadata.beds ? (
-              <div className="rounded-2xl border border-white/20 bg-white/5 px-5 py-4">
-                <p className="text-xs uppercase tracking-wide text-fg/60">Спальных мест</p>
-                <p className="mt-2 text-lg font-semibold text-fg">{metadata.beds}</p>
-              </div>
-            ) : null}
+            <div className="rounded-2xl border border-white/20 bg-white/5 px-5 py-4">
+              <p className="text-xs uppercase tracking-wide text-fg/60">Имя</p>
+              <p className="mt-2 text-lg font-semibold text-fg">{user?.name || 'Без имени'}</p>
+            </div>
+            <div className="rounded-2xl border border-white/20 bg-white/5 px-5 py-4 md:col-span-2">
+              <p className="text-xs uppercase tracking-wide text-fg/60">Email</p>
+              <p className="mt-2 text-sm text-fg/80">{user?.email}</p>
+            </div>
           </div>
           <div className="flex justify-end">
             <button

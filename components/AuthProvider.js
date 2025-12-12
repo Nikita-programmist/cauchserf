@@ -12,13 +12,20 @@ const AuthContext = createContext({
   token: null,
   login: async (_email, _password) => {},
   register: async (_email, _password, _name) => {},
-  logout: async () => {}
+  logout: async () => {},
+  refreshUser: async () => {}
 });
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setLocalToken] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const refreshUser = async () => {
+    const profile = await getCurrentUser();
+    setUser(profile);
+    return profile;
+  };
 
   useEffect(() => {
     const existing = getToken();
@@ -27,9 +34,12 @@ export function AuthProvider({ children }) {
       return;
     }
     setLocalToken(existing);
-    getCurrentUser()
-      .then((profile) => setUser(profile))
-      .catch(() => clearToken())
+    refreshUser()
+      .catch(() => {
+        clearToken();
+        setUser(null);
+        setLocalToken(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -38,7 +48,14 @@ export function AuthProvider({ children }) {
     if (result?.token) {
       setToken(result.token);
       setLocalToken(result.token);
-      setUser(result.user);
+      try {
+        const profile = await refreshUser();
+        return { ...result, user: profile };
+      } catch (error) {
+        clearToken();
+        setLocalToken(null);
+        throw error;
+      }
     }
     return result;
   };
@@ -48,7 +65,14 @@ export function AuthProvider({ children }) {
     if (result?.token) {
       setToken(result.token);
       setLocalToken(result.token);
-      setUser(result.user);
+      try {
+        const profile = await refreshUser();
+        return { ...result, user: profile };
+      } catch (error) {
+        clearToken();
+        setLocalToken(null);
+        throw error;
+      }
     }
     return result;
   };
@@ -68,6 +92,7 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      refreshUser,
       supabase: null,
       hasSupabaseEnv: false
     }),
