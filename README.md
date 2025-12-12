@@ -27,6 +27,8 @@ npm run start:dev
 
 ### Переменные окружения для фронтенда
 
+- `API_URL` — адрес backend для серверного прокси (например, `https://<koyeb-app>.koyeb.app`). На Vercel переменную нужно задать
+  для Preview и Production, чтобы все запросы на `/api/*` проксировались на backend.
 - `NEXT_PUBLIC_API_URL` — базовый URL backend (например, `http://localhost:3001`). При отсутствии суффикса
   `/api` он добавится автоматически.
 
