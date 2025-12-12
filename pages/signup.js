@@ -7,18 +7,31 @@ import { useAuth } from '../components/AuthProvider';
 
 export default function SignUpPage() {
   const router = useRouter();
-  const { user, register } = useAuth();
+  const { user, register, refreshUser, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  useEffect(() => {
-    if (user) {
+  const handleRedirect = (profile) => {
+    if (!profile) return;
+    if (!profile.role) {
+      router.replace('/onboarding/role');
+      return;
+    }
+    if (profile.role === 'HOST') {
+      router.replace('/host/setup');
+    } else {
       router.replace('/profile');
     }
-  }, [user, router]);
+  };
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      handleRedirect(user);
+    }
+  }, [user, authLoading, router]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -27,11 +40,12 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      await register(email, password);
+      const result = await register(email, password);
+      const profile = result?.user ?? (await refreshUser());
       setSuccessMessage('Регистрация прошла успешно! Перенаправляем...');
       setEmail('');
       setPassword('');
-      router.replace('/profile');
+      handleRedirect(profile);
     } catch (err) {
       const body = err?.body ?? err?.response?.data;
       const messageFromBody =

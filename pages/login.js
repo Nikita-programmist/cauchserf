@@ -7,17 +7,30 @@ import { useAuth } from '../components/AuthProvider';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, login } = useAuth();
+  const { user, login, refreshUser, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (user) {
+  const handleRedirect = (profile) => {
+    if (!profile) return;
+    if (!profile.role) {
+      router.replace('/onboarding/role');
+      return;
+    }
+    if (profile.role === 'HOST') {
+      router.replace('/host/setup');
+    } else {
       router.replace('/profile');
     }
-  }, [user, router]);
+  };
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      handleRedirect(user);
+    }
+  }, [user, authLoading, router]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -25,8 +38,9 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email, password);
-      router.replace('/profile');
+      const result = await login(email, password);
+      const profile = result?.user ?? (await refreshUser());
+      handleRedirect(profile);
     } catch (err) {
       const body = err?.body ?? err?.response?.data;
       const code = body?.code;

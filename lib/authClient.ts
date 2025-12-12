@@ -4,6 +4,9 @@ export interface AuthUser {
   id: string;
   email: string;
   name?: string | null;
+  role?: string | null;
+  avatarUrl?: string | null;
+  hostProfile?: any;
 }
 
 export async function register(email: string, password: string, name?: string) {

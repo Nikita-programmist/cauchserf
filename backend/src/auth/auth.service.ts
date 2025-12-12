@@ -4,6 +4,7 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../common/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { UserRole } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -26,7 +27,7 @@ export class AuthService {
         name: dto.name ?? dto.email.split('@')[0]
       }
     });
-    return this.buildAuthResponse(user.id, user.email, user.name ?? null);
+    return this.buildAuthResponse(user.id, user.email, user.name ?? null, user.role ?? null);
   }
 
   async login(dto: LoginDto) {
@@ -46,11 +47,11 @@ export class AuthService {
         code: 'INVALID_PASSWORD'
       });
     }
-    return this.buildAuthResponse(user.id, user.email, user.name ?? null);
+    return this.buildAuthResponse(user.id, user.email, user.name ?? null, user.role ?? null);
   }
 
-  private buildAuthResponse(id: string, email: string, name: string | null) {
+  private buildAuthResponse(id: string, email: string, name: string | null, role: UserRole | null) {
     const token = this.jwt.sign({ sub: id, email });
-    return { token, user: { id, email, name } };
+    return { token, user: { id, email, name, role } };
   }
 }
