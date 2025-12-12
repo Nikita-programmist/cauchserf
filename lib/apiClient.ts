@@ -32,9 +32,22 @@ async function request(path: string, options: RequestInit = {}) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   if (!res.ok) {
-    const message = await res.text();
-    const error = new Error(message || 'Request failed');
+    const responseText = await res.text();
+    let parsedBody: any = null;
+    try {
+      parsedBody = responseText ? JSON.parse(responseText) : null;
+    } catch (err) {
+      parsedBody = null;
+    }
+
+    const errorMessage =
+      (parsedBody && typeof parsedBody === 'object' && parsedBody.message) ||
+      responseText ||
+      'Request failed';
+
+    const error = new Error(typeof errorMessage === 'string' ? errorMessage : 'Request failed');
     (error as any).status = res.status;
+    (error as any).body = parsedBody ?? responseText;
     throw error;
   }
   if (res.status === 204) return null;

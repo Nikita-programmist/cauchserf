@@ -28,7 +28,30 @@ export default function LoginPage() {
       await login(email, password);
       router.replace('/profile');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось войти');
+      let code = null;
+      if (err && typeof err === 'object') {
+        const body = err.body ?? err.response?.data ?? null;
+        if (body) {
+          if (typeof body === 'string') {
+            try {
+              const parsed = JSON.parse(body);
+              code = parsed?.message?.code ?? parsed?.code ?? null;
+            } catch (_) {
+              code = null;
+            }
+          } else if (typeof body === 'object') {
+            code = body?.message?.code ?? body?.code ?? null;
+          }
+        }
+      }
+
+      if (code === 'USER_NOT_FOUND') {
+        setError('Пользователь ещё не зарегистрирован');
+      } else if (code === 'INVALID_PASSWORD') {
+        setError('Неверный пароль');
+      } else {
+        setError('Ошибка входа');
+      }
     } finally {
       setLoading(false);
     }
