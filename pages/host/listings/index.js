@@ -3,76 +3,67 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
+import BackToHomeLink from '../../../components/BackToHomeLink';
 import { useAuth } from '../../../components/AuthProvider';
-import { Button } from '../../../components/ui/button';
+import { apiClient } from '../../../lib/apiClient';
 
 export default function HostListingsPage() {
   const router = useRouter();
-  const { supabase, hasSupabaseEnv } = useAuth();
-
+  const { token, loading: authLoading, refreshUser } = useAuth();
   const [listings, setListings] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [isHost, setIsHost] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabase || !hasSupabaseEnv) {
-      setLoading(false);
-      setError('Не настроено подключение к Supabase.');
+    if (authLoading) return;
+    if (!token) {
+      router.replace('/login');
       return;
     }
 
-    let active = true;
-
     const load = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!active) return;
-
-      const currentUser = data?.user;
-      if (!currentUser) {
-        router.replace('/login');
-        return;
+      setLoading(true);
+      setError('');
+      try {
+        const profile = await refreshUser();
+        if (!profile) {
+          router.replace('/login');
+          return;
+        }
+        if (profile.role !== 'HOST') {
+          setError('Создавать и просматривать объявления могут только хосты.');
+          setLoading(false);
+          return;
+        }
+        const data = await apiClient.get('/places/mine');
+        setListings(Array.isArray(data) ? data : []);
+      } catch (err) {
+        setError(err?.message || 'Не удалось загрузить объявления');
+      } finally {
+        setLoading(false);
       }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', currentUser.id)
-        .maybeSingle();
-
-      if (!active) return;
-
-      if (profile?.role !== 'host') {
-        router.replace('/profile');
-        return;
-      }
-
-      setIsHost(true);
-
-      const { data: listingsData, error: listingsError } = await supabase
-        .from('listings')
-        .select('id, title, city, guests, photos')
-        .eq('host_id', currentUser.id);
-
-      if (!active) return;
-
-      if (listingsError) {
-        setError(listingsError.message);
-        setListings([]);
-      } else {
-        setError('');
-        setListings(listingsData ?? []);
-      }
-
-      setLoading(false);
     };
 
     load();
+  }, [authLoading, token, refreshUser, router]);
 
-    return () => {
-      active = false;
-    };
-  }, [supabase, hasSupabaseEnv, router]);
+  if (loading) {
+    return (
+      <main className="mx-auto mt-16 flex w-full max-w-3xl flex-col gap-6 px-6">
+        <BackToHomeLink className="self-start" />
+        <div className="glass px-8 py-10 text-center text-sm text-fg/70">Загружаем ваши объявления…</div>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="mx-auto mt-16 flex w-full max-w-3xl flex-col gap-6 px-6">
+        <BackToHomeLink className="self-start" />
+        <div className="glass px-8 py-10 text-center text-sm text-red-400">{error}</div>
+      </main>
+    );
+  }
 
   return (
     <>
@@ -80,58 +71,36 @@ export default function HostListingsPage() {
         <title>Мои объявления — Домик</title>
       </Head>
       <main className="mx-auto mt-16 flex w-full max-w-4xl flex-col gap-6 px-6 pb-16">
-        <section className="glass flex flex-col gap-6 px-8 py-10">
-          <div className="flex flex-col gap-2">
-            <h1 className="text-3xl font-semibold text-fg">Мои объявления</h1>
-            <p className="text-sm text-fg/70">Управляйте жильём, которое вы публикуете в Домике.</p>
+        <BackToHomeLink className="self-start" />
+        <section className="glass flex flex-col gap-4 px-8 py-10">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-fg/60">Хозяин</p>
+              <h1 className="text-2xl font-semibold text-fg">Ваши объявления</h1>
+            </div>
+            <Link
+              href="/host/listings/new"
+              className="rounded-xl bg-white/80 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white"
+            >
+              Создать объявление
+            </Link>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button asChild>
-              <Link href="/host/listings/new">Новое объявление</Link>
-            </Button>
-            <Button variant="ghost" disabled>
-              Редактировать
-            </Button>
-          </div>
-          {loading ? <p className="text-sm text-fg/70">Загружаем объявления…</p> : null}
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
-          {!loading && isHost && listings.length === 0 ? (
-            <p className="text-sm text-fg/70">Вы ещё не опубликовали ни одного объявления.</p>
-          ) : null}
-          <div className="grid gap-4">
-            {listings.map((listing) => {
-              const cover = Array.isArray(listing.photos) ? listing.photos[0] : null;
-              return (
-                <div
-                  key={listing.id}
-                  className="glass flex flex-col gap-4 rounded-3xl border border-white/15 bg-white/5 px-6 py-5 md:flex-row md:items-center md:justify-between"
+          {listings.length === 0 ? (
+            <p className="text-sm text-fg/70">У вас пока нет объявлений.</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {listings.map((place) => (
+                <Link
+                  key={place.id}
+                  href={`/listings/${place.id}`}
+                  className="rounded-2xl border border-white/20 bg-white/5 px-5 py-4 transition hover:border-white/60 hover:bg-white/10"
                 >
-                  <div className="flex flex-1 items-center gap-4">
-                    <div className="h-20 w-28 overflow-hidden rounded-2xl border border-white/15 bg-white/10">
-                      {cover ? (
-                        <img src={cover} alt={listing.title} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-fg/60">Нет фото</div>
-                      )}
-                    </div>
-                    <div className="flex flex-1 flex-col">
-                      <h2 className="text-lg font-semibold text-fg">{listing.title}</h2>
-                      <p className="text-sm text-fg/70">{listing.city}</p>
-                      <p className="text-xs text-fg/60">Гостей: {listing.guests}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2 md:items-end">
-                    <Link href={`/listings/${listing.id}`} className="text-sm text-white hover:text-white/80">
-                      Открыть объявление
-                    </Link>
-                    <Button variant="ghost" disabled>
-                      Редактировать
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  <p className="text-sm font-semibold text-fg">{place.title}</p>
+                  <p className="text-xs text-fg/60">{place.city}{place.country ? `, ${place.country}` : ''}</p>
+                </Link>
+              ))}
+            </div>
+          )}
         </section>
       </main>
     </>

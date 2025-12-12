@@ -8,6 +8,11 @@ import { CurrentUser } from '../auth/current-user.decorator';
 export class PlacesController {
   constructor(private placesService: PlacesService) {}
 
+  @Get('search')
+  search(@Query('city') city?: string) {
+    return this.placesService.search(city);
+  }
+
   @Get()
   list(
     @Query('city') city?: string,
@@ -26,5 +31,11 @@ export class PlacesController {
   @Post()
   create(@CurrentUser() user: any, @Body() dto: CreatePlaceDto) {
     return this.placesService.create(user.userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('mine')
+  listMine(@CurrentUser() user: any) {
+    return this.placesService.listForHost(user.userId);
   }
 }

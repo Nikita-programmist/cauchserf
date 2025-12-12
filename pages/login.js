@@ -16,14 +16,10 @@ export default function LoginPage() {
   const handleRedirect = (profile) => {
     if (!profile) return;
     if (!profile.role) {
-      router.replace('/onboarding/role');
+      router.replace('/onboarding');
       return;
     }
-    if (profile.role === 'HOST') {
-      router.replace('/host/setup');
-    } else {
-      router.replace('/profile');
-    }
+    router.replace('/profile');
   };
 
   useEffect(() => {

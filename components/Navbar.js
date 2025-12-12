@@ -22,7 +22,7 @@ export function Navbar() {
     router.push('/');
   };
 
-  const roleLabel = user?.role === 'HOST' ? 'Хозяин' : user?.role === 'TRAVELER' ? 'Гость' : null;
+  const roleLabel = user?.role === 'HOST' ? 'Хозяин' : user?.role === 'GUEST' ? 'Гость' : null;
   const isHost = user?.role === 'HOST';
 
   return (

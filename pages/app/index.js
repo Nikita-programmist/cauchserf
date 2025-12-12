@@ -6,7 +6,7 @@ import { useAuth } from '../../components/AuthProvider';
 
 const roleLabels = {
   HOST: 'Хозяин',
-  TRAVELER: 'Путешественник'
+  GUEST: 'Путешественник'
 };
 
 export default function AppHomePage() {
@@ -26,11 +26,19 @@ export default function AppHomePage() {
         return;
       }
       if (!profile.role) {
-        router.replace('/onboarding/role');
+        router.replace('/onboarding');
         return;
       }
       setUser(profile);
     } catch (err) {
+      if (err?.status === 404 && err?.body?.code === 'PROFILE_NOT_CREATED') {
+        router.replace('/onboarding');
+        return;
+      }
+      if (err?.status === 401) {
+        router.replace('/login');
+        return;
+      }
       setError(err?.message || 'Не удалось загрузить профиль');
     } finally {
       setLoading(false);

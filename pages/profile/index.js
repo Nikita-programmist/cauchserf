@@ -8,7 +8,7 @@ import { useAuth } from '../../components/AuthProvider';
 
 const roleLabels = {
   HOST: 'Хозяин',
-  TRAVELER: 'Путешественник'
+  GUEST: 'Путешественник'
 };
 
 export default function ProfilePage() {
@@ -28,11 +28,19 @@ export default function ProfilePage() {
         return;
       }
       if (!user.role) {
-        router.replace('/onboarding/role');
+        router.replace('/onboarding');
         return;
       }
       setProfile(user);
     } catch (err) {
+      if (err?.status === 404 && err?.body?.code === 'PROFILE_NOT_CREATED') {
+        router.replace('/onboarding');
+        return;
+      }
+      if (err?.status === 401) {
+        router.replace('/login');
+        return;
+      }
       setError(err?.message || 'Не удалось загрузить профиль');
     } finally {
       setLoading(false);
