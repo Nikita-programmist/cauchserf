@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../common/prisma.service';
@@ -33,9 +33,9 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (!user) {
-      throw new UnauthorizedException({
-        statusCode: 401,
-        message: 'Пользователь не найден',
+      throw new NotFoundException({
+        statusCode: 404,
+        message: 'Пользователь не зарегистрирован',
         code: 'USER_NOT_FOUND'
       });
     }
@@ -43,7 +43,7 @@ export class AuthService {
     if (!valid) {
       throw new UnauthorizedException({
         statusCode: 401,
-        message: 'Неверный пароль',
+        message: 'Неверный email или пароль',
         code: 'INVALID_PASSWORD'
       });
     }

@@ -31,8 +31,12 @@ export default function AppHomePage() {
       }
       setUser(profile);
     } catch (err) {
-      if (err?.status === 404 && err?.body?.code === 'PROFILE_NOT_CREATED') {
+      if (err?.status === 404 && err?.body?.code === 'PROFILE_NOT_FOUND') {
         router.replace('/onboarding');
+        return;
+      }
+      if (err?.status === 404 && err?.body?.code === 'USER_NOT_FOUND') {
+        router.replace('/login');
         return;
       }
       if (err?.status === 401) {

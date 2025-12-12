@@ -39,7 +39,7 @@ export class UsersService {
       }
     });
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User not found' });
     }
     return user;
   }
@@ -106,7 +106,7 @@ export class UsersService {
           : null;
 
     if (!profile) {
-      throw new NotFoundException({ code: 'PROFILE_NOT_CREATED', message: 'Profile is not created yet' });
+      throw new NotFoundException({ code: 'PROFILE_NOT_FOUND', message: 'Profile is not created yet' });
     }
 
     return user;

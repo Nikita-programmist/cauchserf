@@ -4,7 +4,7 @@ import { CreatePlaceDto } from './dto/create-place.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 
-@Controller('places')
+@Controller(['places', 'api/places'])
 export class PlacesController {
   constructor(private placesService: PlacesService) {}
 

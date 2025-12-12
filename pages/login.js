@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [showOnboardingCta, setShowOnboardingCta] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleRedirect = (profile) => {
@@ -31,6 +32,7 @@ export default function LoginPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+    setShowOnboardingCta(false);
     setLoading(true);
 
     try {
@@ -39,15 +41,19 @@ export default function LoginPage() {
       handleRedirect(profile);
     } catch (err) {
       const body = err?.body ?? err?.response?.data;
+      const status = err?.status ?? err?.response?.status;
       const code = body?.code;
       const messageFromBody =
         (typeof body?.message === 'string' && body.message) ||
         (Array.isArray(body?.message) ? body.message.join(', ') : null);
 
-      if (code === 'USER_NOT_FOUND') {
-        setError('Пользователь ещё не зарегистрирован');
-      } else if (code === 'INVALID_PASSWORD') {
-        setError('Неверный пароль');
+      if (status === 401) {
+        setError('Неверный email/пароль');
+      } else if (status === 404 && code === 'USER_NOT_FOUND') {
+        setError('Пользователь не зарегистрирован');
+      } else if (status === 404 && code === 'PROFILE_NOT_FOUND') {
+        setError('Заполните анкету');
+        setShowOnboardingCta(true);
       } else if (messageFromBody) {
         setError(messageFromBody);
       } else if (err?.message) {
@@ -94,7 +100,20 @@ export default function LoginPage() {
                 className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-fg placeholder:text-fg/40 focus:border-white/60 focus:outline-none"
               />
             </label>
-            {error ? <p className="text-sm text-red-500">{error}</p> : null}
+            {error ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-red-500">{error}</p>
+                {showOnboardingCta ? (
+                  <button
+                    type="button"
+                    onClick={() => router.push('/onboarding')}
+                    className="inline-flex w-max items-center justify-center rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-fg hover:border-white/60 hover:bg-white/10"
+                  >
+                    Заполнить
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             <button
               type="submit"
               disabled={loading}
