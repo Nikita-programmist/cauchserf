@@ -82,7 +82,8 @@ export async function GET(
       return NextResponse.json({ error: 'failed_to_load_messages' }, { status: 500 });
     }
 
-    return NextResponse.json({ room_id: roomId, messages: data ?? [] }, { status: 200 });
+    const items = data ?? [];
+    return NextResponse.json({ room_id: roomId, messages: items, items }, { status: 200 });
   } catch (err) {
     console.error(`[GET /api/rooms/${roomId}/messages] unexpected error`, err);
     return NextResponse.json({ error: 'unexpected_error' }, { status: 500 });

@@ -126,8 +126,19 @@ export async function PATCH(
 
   const payload = await request.json().catch(() => null);
   const actionRaw = typeof payload?.action === 'string' ? payload.action.trim().toLowerCase() : '';
+  const statusRaw = typeof payload?.status === 'string' ? payload.status.trim().toLowerCase() : '';
 
-  if (!['accept', 'decline', 'cancel'].includes(actionRaw)) {
+  const resolvedAction =
+    actionRaw ||
+    (statusRaw === 'accepted'
+      ? 'accept'
+      : statusRaw === 'declined'
+      ? 'decline'
+      : statusRaw === 'cancelled'
+      ? 'cancel'
+      : '');
+
+  if (!['accept', 'decline', 'cancel'].includes(resolvedAction)) {
     return NextResponse.json({ error: 'invalid_action' }, { status: 400 });
   }
 
@@ -152,7 +163,7 @@ export async function PATCH(
   try {
     let updated: ApplicationRow = data as ApplicationRow;
 
-    if (actionRaw === 'accept') {
+    if (resolvedAction === 'accept') {
       if (!isHost) {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 });
       }
@@ -163,7 +174,7 @@ export async function PATCH(
       } else {
         updated = await acceptApplication(supabase, data as ApplicationRow);
       }
-    } else if (actionRaw === 'decline') {
+    } else if (resolvedAction === 'decline') {
       if (!isHost) {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 });
       }
@@ -177,7 +188,7 @@ export async function PATCH(
         throw declineError ?? new Error('decline_failed');
       }
       updated = declined as ApplicationRow;
-    } else if (actionRaw === 'cancel') {
+    } else if (resolvedAction === 'cancel') {
       if (!isGuest) {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 });
       }
