@@ -21,7 +21,7 @@ export function AuthProvider({ children }) {
   const [token, setLocalToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const isProfileMissingError = (error) => error?.status === 404 && error?.body?.code === 'PROFILE_NOT_CREATED';
+  const isProfileMissingError = (error) => error?.status === 404 && error?.body?.code === 'PROFILE_NOT_FOUND';
 
   const refreshUser = async () => {
     const profile = await getCurrentUser();

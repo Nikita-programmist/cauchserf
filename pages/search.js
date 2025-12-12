@@ -34,7 +34,7 @@ export default function SearchPage() {
     setHasSearched(true);
 
     try {
-      const data = await apiClient.get(`/places/search?city=${encodeURIComponent(city)}`);
+      const data = await apiClient.get(`/api/places?city=${encodeURIComponent(city)}`);
       setListings(Array.isArray(data) ? data : []);
     } catch (requestError) {
       setError(requestError?.message || 'Не удалось выполнить поиск.');
