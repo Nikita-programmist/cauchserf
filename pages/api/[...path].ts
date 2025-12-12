@@ -34,12 +34,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const method = req.method || 'GET';
   const bodyBuffer = ['GET', 'HEAD'].includes(method) ? undefined : await collectRequestBody(req);
+  const body = bodyBuffer ? new Uint8Array(bodyBuffer) : undefined;
 
   try {
     const response = await fetch(targetUrl, {
       method,
       headers,
-      body: bodyBuffer,
+      body,
       redirect: 'manual'
     });
 
