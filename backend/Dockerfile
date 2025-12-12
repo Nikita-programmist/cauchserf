@@ -36,4 +36,4 @@ COPY --from=builder /usr/src/app/dist ./dist
 
 EXPOSE 8000
 
-CMD ["npm", "run", "start:prod"]
+CMD ["sh", "-c", "npm run prisma:generate && npm run db:deploy && node dist/main.js"]
