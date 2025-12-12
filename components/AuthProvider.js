@@ -21,6 +21,8 @@ export function AuthProvider({ children }) {
   const [token, setLocalToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const isProfileMissingError = (error) => error?.status === 404 && error?.body?.code === 'PROFILE_NOT_CREATED';
+
   const refreshUser = async () => {
     const profile = await getCurrentUser();
     setUser(profile);
@@ -35,7 +37,8 @@ export function AuthProvider({ children }) {
     }
     setLocalToken(existing);
     refreshUser()
-      .catch(() => {
+      .catch((error) => {
+        if (isProfileMissingError(error)) return;
         clearToken();
         setUser(null);
         setLocalToken(null);
@@ -48,12 +51,17 @@ export function AuthProvider({ children }) {
     if (result?.token) {
       setToken(result.token);
       setLocalToken(result.token);
+      setUser(result.user ?? null);
       try {
         const profile = await refreshUser();
         return { ...result, user: profile };
       } catch (error) {
+        if (isProfileMissingError(error)) {
+          return { ...result, user: result.user ?? null };
+        }
         clearToken();
         setLocalToken(null);
+        setUser(null);
         throw error;
       }
     }
@@ -65,12 +73,17 @@ export function AuthProvider({ children }) {
     if (result?.token) {
       setToken(result.token);
       setLocalToken(result.token);
+      setUser(result.user ?? null);
       try {
         const profile = await refreshUser();
         return { ...result, user: profile };
       } catch (error) {
+        if (isProfileMissingError(error)) {
+          return { ...result, user: result.user ?? null };
+        }
         clearToken();
         setLocalToken(null);
+        setUser(null);
         throw error;
       }
     }
